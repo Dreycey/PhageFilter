@@ -7,5 +7,5 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let seq_file_path = args[1].clone().parse::<String>().unwrap();
     // obtain genomes from fasta/fastq files
-    file_parser::get_genomes(&seq_file_path)
+    let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
 }

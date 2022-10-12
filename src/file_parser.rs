@@ -3,6 +3,12 @@ use bio::io::fastq;
 use std::fs;
 use std::fs::metadata;
 
+#[derive(Debug)]
+pub enum RecordTypes {
+    FastaRecord(fasta::Record),
+    FastqRecord(fastq::Record),
+}
+
 /// get_genomes(genomes_path: &String)
 /// --
 /// obtains a list of genome objects given a genome directory,
@@ -16,20 +22,24 @@ use std::fs::metadata;
 ///
 /// Notes
 /// -----
-///
+/// 1. TODO: This stores all of the reads into memory, using iterator
+///          may be prefered
 /// Examples
 /// --------
 ///
-pub fn get_genomes(genomes_path: &String) {
+pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
     let md = metadata(genomes_path).unwrap();
+    let mut records_arr: Vec<RecordTypes> = vec![];
     if md.is_dir() {
         let paths = fs::read_dir(genomes_path).unwrap();
         for path in paths {
-            //println!("{:?}", path.unwrap().path().to_str().unwrap());
-            parse_genome_file(&path.unwrap().path().to_str().unwrap().to_string());
+            let mut tmp_arr: Vec<RecordTypes> =
+                parse_genome_file(&path.unwrap().path().to_str().unwrap().to_string());
+            records_arr.append(&mut tmp_arr);
         }
+        return records_arr;
     } else {
-        parse_genome_file(genomes_path);
+        return parse_genome_file(genomes_path);
     }
 }
 
@@ -45,19 +55,22 @@ pub fn get_genomes(genomes_path: &String) {
 ///
 /// Notes
 /// -----
-///
+/// 1. TODO: This stores all of the reads into memory, using iterator
+///          may be prefered
 /// Examples
 /// --------
 ///
-fn parse_genome_file(genomes_file_path: &String) {
+fn parse_genome_file(genomes_file_path: &String) -> Vec<RecordTypes> {
     println!("\nParsing file: {}\n", genomes_file_path);
     if genomes_file_path.ends_with(".fa")
         || genomes_file_path.ends_with(".fasta")
         || genomes_file_path.ends_with(".fna")
     {
-        fasta_parser(&genomes_file_path);
+        return fasta_parser(&genomes_file_path);
     } else if genomes_file_path.ends_with(".fq") || genomes_file_path.ends_with(".fastq") {
-        fastq_parser(&genomes_file_path);
+        return fastq_parser(&genomes_file_path);
+    } else {
+        panic!("Incorrect file path: {}", genomes_file_path);
     }
 }
 
@@ -73,25 +86,18 @@ fn parse_genome_file(genomes_file_path: &String) {
 ///
 /// Notes
 /// -----
-///
+/// 1. TODO: This stores all of the reads into memory, using iterator
+///          may be prefered
 /// Examples
 /// --------
 ///
-fn fasta_parser(file_path: &String) {
-    let mut nb_reads = 0;
-    let mut nb_bases = 0;
+fn fasta_parser(file_path: &String) -> Vec<RecordTypes> {
     let reader = fasta::Reader::from_file(file_path).unwrap();
-    //let fa_reader = reader.from_file("fake_fasta.fa");
+    let mut records_arr: Vec<RecordTypes> = vec![];
     for result in reader.records() {
-        let result_data = &result.unwrap();
-
-        nb_reads += 1;
-        nb_bases += result_data.seq().len();
-        println!("{:?}", result_data.id());
-        //println!("Genome Length: {:?}", result_data.seq());
+        records_arr.push(RecordTypes::FastaRecord(result.unwrap()));
     }
-    println!("Number of reads: {}", nb_reads);
-    println!("Number of bases: {}", nb_bases);
+    return records_arr;
 }
 
 /// fastq_parser(file_path: &String)
@@ -106,21 +112,16 @@ fn fasta_parser(file_path: &String) {
 ///
 /// Notes
 /// -----
-///
+/// 1. TODO: This stores all of the reads into memory, using iterator
+///          may be prefered
 /// Examples
 /// --------
 ///
-fn fastq_parser(file_path: &String) {
-    let mut nb_reads = 0;
-    let mut nb_bases = 0;
+fn fastq_parser(file_path: &String) -> Vec<RecordTypes> {
     let reader = fastq::Reader::from_file(file_path).unwrap();
+    let mut records_arr: Vec<RecordTypes> = vec![];
     for result in reader.records() {
-        let record = &result.unwrap();
-        nb_reads += 1;
-        nb_bases += record.seq().len();
-        //println!("{:?}", result_data.id());
-        //println!("Genome Length: {:?}", record.seq());
+        records_arr.push(RecordTypes::FastqRecord(result.unwrap()));
     }
-    println!("Number of reads: {}", nb_reads);
-    println!("Number of bases: {}", nb_bases);
+    return records_arr;
 }
