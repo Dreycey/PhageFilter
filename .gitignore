@@ -1,3 +1,4 @@
 # Build and Release Folders
 target/
 Cargo.lock
+small_genome_dir/
