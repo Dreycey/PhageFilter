@@ -1,4 +1,4 @@
-![PhageFilter Logo](misc/PhageFilterLogo.png)
+![misc/PhageFilterLogo.png](misc/PhageFilterLogo.png)
 
 # PhageFilter
 
