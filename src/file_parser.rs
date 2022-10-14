@@ -61,7 +61,7 @@ pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
 /// --------
 ///
 fn parse_genome_file(genomes_file_path: &String) -> Vec<RecordTypes> {
-    println!("\nParsing file: {}\n", genomes_file_path);
+    //println!("\nParsing file: {}\n", genomes_file_path);
     if genomes_file_path.ends_with(".fa")
         || genomes_file_path.ends_with(".fasta")
         || genomes_file_path.ends_with(".fna")
