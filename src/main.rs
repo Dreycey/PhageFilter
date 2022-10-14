@@ -85,8 +85,8 @@ fn check(
     // calculate the number of mapped kmers
     let kmers_in_bloom_filter: usize = bit_vec.iter().filter(|&n| *n == true).count();
     let kmer_freq: f32 = (kmers_in_bloom_filter as f32) / (bit_vec.len() as f32);
-    // println!("{:#?}", kmer_freq);
-    if kmer_freq > 0.2 {
+    // kmer frequency
+    if kmer_freq > 0.01 {
         let s = match std::string::String::from_utf8(sequence) {
             Ok(v) => v,
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
@@ -96,7 +96,6 @@ fn check(
         owned_string.push_str("\n");
         owned_string.push_str(&s as &str);
         owned_string.push_str("\n");
-        // println!(">{}\n{}", id, s);
         out_file
             .write(owned_string.as_bytes())
             .expect("problem writing to file!");
