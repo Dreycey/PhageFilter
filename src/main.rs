@@ -44,7 +44,7 @@ fn add_to_bloom(
     for genome in parsed_genomes {
         let sequence: Vec<u8> = file_parser::get_sequence(&genome);
         let id: &str = file_parser::get_id(&genome);
-        let kmers = sequence.windows(kmer_size); // ATGC -> AT, TG, GC
+        let kmers = file_parser::get_kmers(&sequence, &kmer_size); // ATGC -> AT, TG, GC
         for kmer in kmers {
             bloom_filter.insert(&kmer);
         }
@@ -77,7 +77,7 @@ fn check(
     // map kmers
     let sequence: Vec<u8> = file_parser::get_sequence(read);
     let id: &str = file_parser::get_id(&read);
-    let kmers = sequence.windows(kmer_size);
+    let kmers = file_parser::get_kmers(&sequence, &kmer_size);
     let mut bit_vec: Vec<bool> = vec![];
     for kmer in kmers {
         bit_vec.push(bloom_filter.contains(&kmer));

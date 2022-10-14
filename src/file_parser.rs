@@ -1,3 +1,4 @@
+use bio::alphabets::dna;
 use bio::io::fasta;
 use bio::io::fastq;
 use std::fs;
@@ -7,6 +8,27 @@ use std::fs::metadata;
 pub enum RecordTypes {
     FastaRecord(fasta::Record),
     FastqRecord(fastq::Record),
+}
+
+fn get_lex_less(kmer: Vec<u8>) -> Vec<u8> {
+    let kmer_revc: Vec<u8> = dna::revcomp(&kmer);
+    for index in 0..kmer.len() {
+        if kmer[index] < kmer_revc[index] {
+            return kmer;
+        } else if kmer[index] > kmer_revc[index] {
+            return kmer_revc;
+        }
+    }
+    return kmer; // if equal.
+}
+
+pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
+    let mut max_kmers: Vec<Vec<u8>> = vec![];
+    for kmer_ind in 0..sequence.len() - kmer_size {
+        let kmer: Vec<u8> = sequence[kmer_ind..=kmer_ind + kmer_size].to_vec();
+        max_kmers.push(get_lex_less(kmer));
+    }
+    max_kmers
 }
 
 pub fn get_sequence(genome: &RecordTypes) -> Vec<u8> {
