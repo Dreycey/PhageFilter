@@ -9,6 +9,22 @@ pub enum RecordTypes {
     FastqRecord(fastq::Record),
 }
 
+pub fn get_sequence(genome: &RecordTypes) -> Vec<u8> {
+    let sequence: Vec<u8> = match genome {
+        RecordTypes::FastaRecord(record) => record.seq().to_vec(),
+        RecordTypes::FastqRecord(record) => record.seq().to_vec(),
+    };
+    sequence
+}
+
+pub fn get_id(genome: &RecordTypes) -> &str {
+    let sequence: &str = match genome {
+        RecordTypes::FastaRecord(record) => record.id(),
+        RecordTypes::FastqRecord(record) => record.id(),
+    };
+    sequence
+}
+
 /// get_genomes(genomes_path: &String)
 /// --
 /// obtains a list of genome objects given a genome directory,

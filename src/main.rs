@@ -13,7 +13,7 @@ fn main() {
     let seq_file_path = args[1].clone().parse::<String>().unwrap();
     let read_file_path: String = args[2].clone().parse::<String>().unwrap();
     let out_file_path: String = args[3].clone().parse::<String>().unwrap();
-    let out_file = File::create(out_file_path).unwrap();
+
     // number of threads to run
     rayon::ThreadPoolBuilder::new()
         .num_threads(7)
@@ -25,6 +25,9 @@ fn main() {
     // obtain genomes from fasta/fastq files
     let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
     add_to_bloom(parsed_genomes, 20, &mut bloom_filter);
+
+    // open output file to write to
+    let out_file = File::create(out_file_path).unwrap();
 
     // parse reads.
     let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
@@ -39,30 +42,14 @@ fn add_to_bloom(
 ) {
     //let genome: file_parser::Record;
     for genome in parsed_genomes {
-        let sequence: Vec<u8> = get_sequence(&genome);
-        let id: &str = get_id(&genome);
+        let sequence: Vec<u8> = file_parser::get_sequence(&genome);
+        let id: &str = file_parser::get_id(&genome);
         let kmers = sequence.windows(kmer_size); // ATGC -> AT, TG, GC
         for kmer in kmers {
             bloom_filter.insert(&kmer);
         }
         println!("NEW GENOME: {}; length: {:#?}", id, sequence.len());
     }
-}
-
-fn get_sequence(genome: &file_parser::RecordTypes) -> Vec<u8> {
-    let sequence: Vec<u8> = match genome {
-        file_parser::RecordTypes::FastaRecord(record) => record.seq().to_vec(),
-        file_parser::RecordTypes::FastqRecord(record) => record.seq().to_vec(),
-    };
-    sequence
-}
-
-fn get_id(genome: &file_parser::RecordTypes) -> &str {
-    let sequence: &str = match genome {
-        file_parser::RecordTypes::FastaRecord(record) => record.id(),
-        file_parser::RecordTypes::FastqRecord(record) => record.id(),
-    };
-    sequence
 }
 
 fn check_if_in_bloom_filter(
@@ -88,8 +75,8 @@ fn check(
     mut out_file: &File,
 ) {
     // map kmers
-    let sequence: Vec<u8> = get_sequence(read);
-    let id: &str = get_id(&read);
+    let sequence: Vec<u8> = file_parser::get_sequence(read);
+    let id: &str = file_parser::get_id(&read);
     let kmers = sequence.windows(kmer_size);
     let mut bit_vec: Vec<bool> = vec![];
     for kmer in kmers {
