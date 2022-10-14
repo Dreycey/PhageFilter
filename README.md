@@ -6,6 +6,7 @@ PhageFilter uses a Sequence Bloom Tree (SBT) to filter bacteriophage reads from 
 
 ## Usage
 
+```
 A fast, simple, and efficient way to filter metagenomic reads.
 
 Usage: phage_filter [OPTIONS] --genomes <VALUE> --reads <VALUE> --out <VALUE>
@@ -18,6 +19,7 @@ Options:
 -k, --kmer_size <VALUE> Size of the kmer to use; use with caution! [default: 20]
 -h, --help Print help information
 -V, --version Print version information
+```
 
 ## Examples
 
