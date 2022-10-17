@@ -1,6 +1,6 @@
 mod bloom_filter;
+use bloom_filter::ASMS;
 mod file_parser;
-use bloom::ASMS;
 use std::env;
 
 fn main() {
@@ -9,11 +9,14 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let seq_file_path = args[1].clone().parse::<String>().unwrap();
     let read_file_path: String = args[2].clone().parse::<String>().unwrap();
+
     // create a bloom filter
     let mut bloom_filter = bloom_filter::get_bloom_filter();
+
     // obtain genomes from fasta/fastq files
     let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
     add_to_bloom(parsed_genomes, 20, &mut bloom_filter);
+
     // parse reads.
     let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
     check_if_in_bloom_filter(parsed_reads, 20, &mut bloom_filter);
@@ -31,7 +34,7 @@ fn add_to_bloom(
             file_parser::RecordTypes::FastaRecord(record) => record.seq().to_vec(),
             file_parser::RecordTypes::FastqRecord(record) => record.seq().to_vec(),
         };
-        let kmers = sequence.windows(kmer_size);
+        let kmers = sequence.windows(kmer_size); // ATGC -> AT, TG, GC
         for kmer in kmers {
             bloom_filter.insert(&kmer);
         }
