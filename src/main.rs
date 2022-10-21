@@ -121,11 +121,6 @@ fn check_if_in_bloom_filter(
     bloom_filter: &bloom_filter::BloomFilter,
     out_file: &File,
 ) {
-    // for read in parsed_reads {
-    //     println!("READ CHECK");
-    //     check(&read, bloom_filter, kmer_size);
-    // }
-
     parsed_reads
         .par_iter_mut()
         .for_each(|read| check_sequence(&read, bloom_filter, kmer_size, out_file));

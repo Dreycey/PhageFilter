@@ -1,4 +1,4 @@
-// utilities for hashing
+/// utilities for hashing
 use std::hash::{BuildHasher, Hash, Hasher};
 pub struct HashIter {
     h1: u64,

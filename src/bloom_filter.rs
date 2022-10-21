@@ -1,45 +1,10 @@
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of the
-// License, or (at your option) any later version.
-
-// This program is distributed in the hope that it will be useful, but
-// WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-// 02110-1301, USA.
-
-/// A standard BloomFilter.  If an item is instered then `contains`
-/// is guaranteed to return `true` for that item.  For items not
-/// inserted `contains` will probably return false.  The probability
-/// that `contains` returns `true` for an item that was not inserted
-/// is called the False Positive Rate.
+/// PhageFilter - bloom filter
 ///
-/// # False Positive Rate
-/// The false positive rate is specified as a float in the range
-/// (0,1).  If indicates that out of `X` probes, `X * rate` should
-/// return a false positive.  Higher values will lead to smaller (but
-/// more inaccurate) filters.
+/// Note:
+///     These methods have been modified from the original
+///     rust-bloom package.
 ///
-/// # Example Usage
 ///
-/// ```rust
-/// use bloom::{ASMS,BloomFilter};
-///
-/// let expected_num_items = 1000;
-///
-/// // out of 100 items that are not inserted, expect 1 to return true for contain
-/// let false_positive_rate = 0.01;
-///
-/// let mut filter = BloomFilter::with_rate(false_positive_rate,expected_num_items);
-/// filter.insert(&1);
-/// filter.contains(&1); /* true */
-/// filter.contains(&2); /* false */
-/// ```
 use bit_vec::BitVec;
 mod hash_iter;
 use std::cmp::{max, min};
@@ -63,15 +28,14 @@ pub trait ASMS {
     fn clear(&mut self);
 }
 
-pub trait DistanceChecker {
-    fn distance(&mut self, other: &Self) -> u8;
-}
-
 pub struct BloomFilter<R = RandomState, S = RandomState> {
     bits: BitVec,
     num_hashes: u32,
     hash_builder_one: R,
     hash_builder_two: S,
+}
+pub trait DistanceChecker {
+    fn distance(&mut self, other: &Self) -> u8;
 }
 
 impl DistanceChecker for BloomFilter<RandomState, RandomState> {
@@ -196,7 +160,7 @@ where
                     }
                 }
                 None => {
-                    panic!("Hash mod failed");
+                    panic!("Hash mod failed - out of bounds for given bit vec");
                 }
             }
         }
