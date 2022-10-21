@@ -46,16 +46,17 @@ use std::cmp::{max, min};
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hash};
 
-pub fn get_bloom_filter() -> BloomFilter {
-    let expected_num_items: u32 = 10000000;
-
-    // // out of 100 items that are not inserted, expect 1 to return true for contain
+pub fn get_bloom_filter(genome_count: usize) -> BloomFilter {
+    let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
+    let expected_num_items: u32 = (genome_count as u32) * max_genome_size;
+    println!("number of items expected: {}\n", expected_num_items);
+    // out of 100 items that are not inserted, expect 0.1 to return true for contain
     let false_positive_rate: f32 = 0.001;
-
+    // instantiate a BloomFilter
     let filter = BloomFilter::with_rate(false_positive_rate, expected_num_items);
-
     return filter;
 }
+
 pub trait ASMS {
     fn insert<T: Hash>(&mut self, item: &T) -> bool;
     fn contains<T: Hash>(&self, item: &T) -> bool;

@@ -3,7 +3,6 @@ use bloom_filter::ASMS;
 mod file_parser;
 use clap::{arg, ArgMatches, Command};
 use rayon::prelude::*;
-use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::str;
@@ -27,24 +26,25 @@ fn main() {
         .parse::<usize>()
         .unwrap();
 
-    print!("{}", thread_count);
     // number of threads to run
     rayon::ThreadPoolBuilder::new()
         .num_threads(thread_count)
         .build_global()
         .unwrap();
 
-    // create a bloom filter
-    let mut bloom_filter = bloom_filter::get_bloom_filter();
-
     // obtain genomes from fasta/fastq files
     let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
+
+    // create a bloom filter
+    let mut bloom_filter = bloom_filter::get_bloom_filter(parsed_genomes.len());
+
+    // add genomes to the bloom filter
     add_to_bloom(parsed_genomes, &kmer_size, &mut bloom_filter);
 
     // open output file to write to
     let out_file = File::create(out_file_path).unwrap();
 
-    // parse reads.
+    // parse reads and check for presence in the bloom filter.
     let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
     check_if_in_bloom_filter(parsed_reads, &kmer_size, &mut bloom_filter, &out_file);
 }
@@ -104,7 +104,6 @@ fn add_to_bloom(
     kmer_size: &usize,
     bloom_filter: &mut bloom_filter::BloomFilter,
 ) {
-    //let genome: file_parser::Record;
     for genome in parsed_genomes {
         let sequence: Vec<u8> = file_parser::get_sequence(&genome);
         let id: &str = file_parser::get_id(&genome);
@@ -129,10 +128,10 @@ fn check_if_in_bloom_filter(
 
     parsed_reads
         .par_iter_mut()
-        .for_each(|read| check(&read, bloom_filter, kmer_size, out_file));
+        .for_each(|read| check_sequence(&read, bloom_filter, kmer_size, out_file));
 }
 
-fn check(
+fn check_sequence(
     read: &file_parser::RecordTypes,
     bloom_filter: &bloom_filter::BloomFilter,
     kmer_size: &usize,

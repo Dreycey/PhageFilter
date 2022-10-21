@@ -1,0 +1,66 @@
+# print usage if not enough input!
+usage() {
+    echo; echo "Usage: bash simulate_reads.sh <reference genome PATH> <Outfilepath> <Threads>";
+    echo; echo "Example: bash simulate_reads.sh ./sarscov2_reference.fa test_output_prefix outfiles_directory/ 4";
+    exit 1;
+}
+
+# getting the global variables set correctly
+ref_gen=$1;
+out_name=$2;
+out_directory=$3;
+THREADS=$4;
+number_of_reads=$5;
+tool_directory="simulation_tools";
+
+if [[ ! -d $out_directory ]]
+then
+    mkdir $out_directory;
+fi
+
+# function for simulating Illumina reads
+function simulate_illumina {
+    echo "Simulating short illumina reads using ART..";
+    if [ ! -f ${out_directory}/${out_name}_illumina.fq ] 
+    then
+        ART_CMD_ARGS="-ss MSv3 -sam -i ${ref_gen} -l 100 -qL 1 -c ${number_of_reads} -o ${out_name}_illumina";
+        command $tool_directory/art_bin_MountRainier/art_illumina $ART_CMD_ARGS;
+        mv ${out_name}_illumina* ${out_directory};
+        # make fasta from fastq
+        paste - - - - < ${out_directory}/simulatedgenomes_illumina.fq | cut -f 1,2 | \
+            sed 's/^@/>/' | tr "\t" "\n" > ${out_directory}/simulatedgenomes_illumina.fa;
+    fi
+}
+
+function simulate_nanopore {
+    echo "Simulating NanoPore reads..";
+    if [ ! -f ${out_directory}/${out_name}_aligned_reads.fasta ]
+    then
+        TRAINING="human_NA12878_DNA_FAB49712_albacore/training"
+        NANO_CMD_ARGS="-rg sarscov2_reference.fa -c ${TRAINING} -o ${out_name} -t ${THREADS}"
+        python3 $tool_directory/NanoSim/src/simulator.py genome $NANO_CMD_ARGS;
+        mv ${out_name}* ${out_directory};
+    fi
+}
+
+function simulate_pacbio {
+    echo "Simulating Pacbio reads..";
+    if [ ! -f ${out_directory}/${out_name}_pacbio.fq ]
+    then
+        # create the index
+        perl $tool_directory/PaSS/pacbio_mkindex.pl ${ref_gen} ${out_directory};
+        # use these files to simulate the pacbio reads
+        ./$tool_directory/PaSS/PaSS -list ${out_directory}/percentage.txt -index ${out_directory}/index -m pacbio_RS  -c PaSS/sim.config -r 2000 -t ${THREADS} -o ${out_name}_pacbio -d; 
+        mv ${out_name}_pacbio* ${out_directory};
+        # make fasta from fastq
+        paste - - - - < ${out_directory}/simulatedgenomes_pacbio.fq | cut -f 1,2 | sed 's/^@/>/' | tr "\t" "\n" > ${out_directory}/simulatedgenomes_pacbio.fa;
+    fi
+}
+
+# main function for controlling the workflow
+function main {
+    simulate_illumina;
+    #simulate_nanopore;
+    #simulate_pacbio;
+}
+main;
