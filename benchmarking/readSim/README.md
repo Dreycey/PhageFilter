@@ -2,7 +2,7 @@
 Read simulation will take in a reference genome as input and simulate reads for 
 Illumina, PacBio and Nanopore. 
 
-> The EnrichSeq Readsimulator aims to simulate both short and long reads at different amounts based on the input genomes and their relative abundance levels. 
+> The PhageFilter Readsimulator aims to simulate both short and long reads at different amounts based on the input genomes and their relative abundance levels. 
 
 ## Quick Usage
 
