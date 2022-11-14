@@ -26,5 +26,6 @@ Options:
 - Using on simulated reads with 7 threads.
 
 ```bash
-./phage_filter -g small_genome_dir/ -r benchmarking/readSim/benchmark_b1_1000000_illumina.fa --out outfile.fa -t 7
+ cargo run -- -g examples/genomes/viral_genome_dir/ -r
+examples/test_reads/simulated_test_reads_illumina.fa  --out outfile.fa -t 4
 ```
