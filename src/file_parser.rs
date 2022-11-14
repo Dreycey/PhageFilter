@@ -66,14 +66,29 @@ pub fn get_id(genome: &RecordTypes) -> &str {
 /// --------
 ///
 pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
+    let supported_extensions = ["fa", "fasta", "fna", "fq", "fastq"];
     let md = metadata(genomes_path).unwrap();
     let mut records_arr: Vec<RecordTypes> = vec![];
     if md.is_dir() {
-        let paths = fs::read_dir(genomes_path).unwrap();
+        let paths = fs::read_dir(genomes_path).unwrap()
+            .filter(|p| match p {
+                Ok(s) => match s.path().extension() {
+                    Some(ext) => {
+                        // Only use paths that have a supported extension
+                        supported_extensions.contains(&ext.to_str().unwrap())
+                    },
+                    None => false
+                }
+                // Propagate errors
+                _ => true,
+            });
         for path in paths {
             let mut tmp_arr: Vec<RecordTypes> =
                 parse_genome_file(&path.unwrap().path().to_str().unwrap().to_string());
             records_arr.append(&mut tmp_arr);
+        }
+        if records_arr.len() == 0 {
+            panic!("Could not load any genomes. May not have any files with a supported extension in the provided directory.");
         }
         return records_arr;
     } else {

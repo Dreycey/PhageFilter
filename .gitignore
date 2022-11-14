@@ -5,3 +5,9 @@ small_genome_dir/
 .pytest_cache
 __pycache__
 tmp_output/
+
+# mac specific files
+.DS_Store
+
+# jetbrains IDE specific files
+.idea
