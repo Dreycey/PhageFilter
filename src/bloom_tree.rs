@@ -172,7 +172,10 @@ pub fn create_bloom_tree(parsed_genomes: Vec<file_parser::RecordTypes>, kmer_siz
     }
     // print final bloom tree
     println!("\n\n In-Order traversal of bloom tree: \n");
-    traverse_bloom_tree(&bloom_tree.root.unwrap())
+    traverse_bloom_tree(&bloom_tree.root.unwrap());
+
+    // get leaf counts
+    //get_leaf_counts(&bloom_tree.root.unwrap());
 }
 
 fn traverse_bloom_tree(bloom_node: &BloomNode) {
@@ -194,6 +197,22 @@ fn traverse_bloom_tree(bloom_node: &BloomNode) {
         Some(child) => {
             println!("{:?}-right: {:?}", bloom_node.tax_id, child.tax_id);
             traverse_bloom_tree(child)
+        }
+    }
+}
+
+fn get_leaf_counts(bloom_node: &BloomNode) {
+    // traverse left children
+    match (&bloom_node.left_child, &bloom_node.right_child) {
+        (None, None) => println!(
+            "id:{:?} counts:{:?}",
+            bloom_node.tax_id, bloom_node.mapped_reads
+        ),
+        (None, Some(l_child)) => get_leaf_counts(l_child),
+        (Some(r_child), None) => get_leaf_counts(r_child),
+        (Some(r_child), Some(l_child)) => {
+            get_leaf_counts(l_child);
+            get_leaf_counts(r_child)
         }
     }
 }
