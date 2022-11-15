@@ -44,6 +44,7 @@ use bit_vec::BitVec;
 mod hash_iter;
 use std::cmp::{max, min};
 use std::collections::hash_map::RandomState;
+use std::fmt::{Debug, Formatter};
 use std::hash::{BuildHasher, Hash};
 
 pub fn get_bloom_filter(hash_states: (RandomState, RandomState)) -> BloomFilter {
@@ -57,6 +58,7 @@ pub fn get_bloom_filter(hash_states: (RandomState, RandomState)) -> BloomFilter 
     return filter;
 }
 
+/// Approximate Set Membership Structure
 pub trait ASMS {
     fn insert<T: Hash>(&mut self, item: &T) -> bool;
     fn contains<T: Hash>(&self, item: &T) -> bool;
@@ -67,11 +69,33 @@ pub trait DistanceChecker {
     fn distance(&self, other: &Self) -> usize;
 }
 
+#[derive(Clone)]
 pub struct BloomFilter<R = RandomState, S = RandomState> {
     bits: BitVec,
     num_hashes: u32,
     hash_builder_one: R,
     hash_builder_two: S,
+}
+
+/// Equality for bloom filters is judged only using the bits field
+impl PartialEq for BloomFilter<RandomState, RandomState> {
+    fn eq(&self, other: &Self) -> bool {
+        self.bits == other.bits
+    }
+}
+
+impl Debug for BloomFilter<RandomState, RandomState> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BloomFilter")
+            // TODO: Omitted bits representation for brevity because the number of bits in the
+            //  bitvector is currently >1,000,000 which takes forever to print out and takes up
+            //  unnecessary space
+            .field("bits", &"[omitted for brevity...]")
+            .field("num_hashes", &self.num_hashes)
+            .field("hash_builder_one", &self.hash_builder_one)
+            .field("hash_builder_two", &self.hash_builder_two)
+            .finish()
+    }
 }
 
 impl DistanceChecker for BloomFilter<RandomState, RandomState> {
