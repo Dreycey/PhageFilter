@@ -248,8 +248,11 @@ mod tests {
         let mut tree = BloomTree::new(kmer_size);
         let record_id = "test";
         let record = RecordTypes::FastaRecord(fasta::Record::with_attrs(record_id, None, "ATCAG".as_ref()));
+        let mut expected_root = Box::new(BloomNode::new(tree.hash_states.clone(), Some(record_id.to_string())));
+        // The root's bloom filter should just be the bloom filter you get from the record
+        expected_root.bloom_filter.union(&tree.init_leaf(&record).bloom_filter);
         let expected_tree = BloomTree {
-            root: Some(Box::new(BloomNode::new(tree.hash_states.clone(), Some(record_id.to_string())))),
+            root: Some(expected_root),
             kmer_size: kmer_size,
             hash_states: tree.hash_states.clone(),
         };
