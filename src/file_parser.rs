@@ -23,9 +23,16 @@ fn get_lex_less(kmer: Vec<u8>) -> Vec<u8> {
 }
 
 pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
+    if kmer_size > sequence.len() || kmer_size == 0 {
+        // Can't get kmers of a size longer than the sequence
+        // Can't get kmers of size 0
+        return vec![];
+    }
+
     let mut max_kmers: Vec<Vec<u8>> = vec![];
-    for kmer_ind in 0..sequence.len() - kmer_size {
-        let kmer: Vec<u8> = sequence[kmer_ind..=kmer_ind + kmer_size].to_vec();
+    // Rust ranges are exclusive on the end index, so adding 1 ensures we get the last kmer
+    for kmer_ind in 0..sequence.len() - kmer_size + 1 {
+        let kmer: Vec<u8> = sequence[kmer_ind..kmer_ind + kmer_size].to_vec();
         max_kmers.push(get_lex_less(kmer));
     }
     max_kmers
@@ -177,4 +184,23 @@ fn fastq_parser(file_path: &String) -> Vec<RecordTypes> {
         records_arr.push(RecordTypes::FastqRecord(result.unwrap()));
     }
     return records_arr;
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_kmers() {
+        // Cannot get a kmer sequence from an empty vec
+        assert_eq!(get_kmers(&vec![], &1), Vec::<Vec<u8>>::new());
+
+        // Cannot get kmers of length 0
+        assert_eq!(get_kmers(&vec![1,2,3], &0), Vec::<Vec<u8>>::new());
+
+        assert_eq!(get_kmers(&vec![1,2,3], &1), vec![vec![1],vec![2],vec![3]]);
+        assert_eq!(get_kmers(&vec![1,2,3], &2), vec![vec![1,2],vec![2,3]]);
+        assert_eq!(get_kmers(&vec![1,2,3], &3), vec![vec![1,2,3]]);
+    }
 }
