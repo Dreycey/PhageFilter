@@ -37,6 +37,7 @@ fn main() {
     // obtain genomes from fasta/fastq files
     let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
 
+    bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
     // // create a bloom filter
     // let mut bloom_filter = bloom_filter::get_bloom_filter(parsed_genomes.len());
 
