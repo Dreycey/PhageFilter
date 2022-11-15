@@ -44,19 +44,21 @@ use bit_vec::BitVec;
 mod hash_iter;
 use std::cmp::{max, min};
 use std::collections::hash_map::RandomState;
+use std::fmt::{Debug, Formatter};
 use std::hash::{BuildHasher, Hash};
 
-pub fn get_bloom_filter(genome_count: usize) -> BloomFilter {
+pub fn get_bloom_filter(hash_states: (RandomState, RandomState)) -> BloomFilter {
     let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
-    let expected_num_items: u32 = (genome_count as u32) * max_genome_size;
+    let expected_num_items: u32 = max_genome_size;
     println!("number of items expected: {}\n", expected_num_items);
     // out of 100 items that are not inserted, expect 0.1 to return true for contain
     let false_positive_rate: f32 = 0.001;
     // instantiate a BloomFilter
-    let filter = BloomFilter::with_rate(false_positive_rate, expected_num_items);
+    let filter = BloomFilter::with_rate(false_positive_rate, expected_num_items, hash_states);
     return filter;
 }
 
+/// Approximate Set Membership Structure
 pub trait ASMS {
     fn insert<T: Hash>(&mut self, item: &T) -> bool;
     fn contains<T: Hash>(&self, item: &T) -> bool;
@@ -64,9 +66,10 @@ pub trait ASMS {
 }
 
 pub trait DistanceChecker {
-    fn distance(&mut self, other: &Self) -> u8;
+    fn distance(&self, other: &Self) -> usize;
 }
 
+#[derive(Clone)]
 pub struct BloomFilter<R = RandomState, S = RandomState> {
     bits: BitVec,
     num_hashes: u32,
@@ -74,16 +77,35 @@ pub struct BloomFilter<R = RandomState, S = RandomState> {
     hash_builder_two: S,
 }
 
+/// Equality for bloom filters is judged only using the bits field
+impl PartialEq for BloomFilter<RandomState, RandomState> {
+    fn eq(&self, other: &Self) -> bool {
+        self.bits == other.bits
+    }
+}
+
+impl Debug for BloomFilter<RandomState, RandomState> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BloomFilter")
+            // TODO: Omitted bits representation for brevity because the number of bits in the
+            //  bitvector is currently >1,000,000 which takes forever to print out and takes up
+            //  unnecessary space
+            .field("bits", &"[omitted for brevity...]")
+            .field("num_hashes", &self.num_hashes)
+            .field("hash_builder_one", &self.hash_builder_one)
+            .field("hash_builder_two", &self.hash_builder_two)
+            .finish()
+    }
+}
+
 impl DistanceChecker for BloomFilter<RandomState, RandomState> {
     /// Calculates the distance between two
     /// bloom filters using the hamming_distance.
-    fn distance(&mut self, other: &BloomFilter) -> u8 {
+    fn distance(&self, other: &BloomFilter) -> usize {
         let mut diff_1: BitVec = self.bits.clone();
-        let mut diff_2: BitVec = other.bits.clone();
-        diff_1.difference(&diff_2);
-        diff_2.difference(&diff_1);
-        diff_1.or(&diff_2);
-        let hamming_distance: u8 = diff_1.iter().filter(|x| *x).count() as u8;
+        diff_1.xor(&other.bits);
+        // Counts the number of bits that differ between the two bitvecs.
+        let hamming_distance: usize = diff_1.iter().filter(|x| *x).count();
         return hamming_distance;
     }
 }
@@ -91,21 +113,34 @@ impl DistanceChecker for BloomFilter<RandomState, RandomState> {
 impl BloomFilter<RandomState, RandomState> {
     /// Create a new BloomFilter with the specified number of bits,
     /// and hashes
-    pub fn with_size(num_bits: usize, num_hashes: u32) -> BloomFilter<RandomState, RandomState> {
+    pub fn with_size(
+        num_bits: usize,
+        num_hashes: u32,
+        hash_states: (RandomState, RandomState),
+    ) -> BloomFilter<RandomState, RandomState> {
+        let (hash_builder_one, hash_builder_two) = hash_states;
         BloomFilter {
             bits: BitVec::from_elem(num_bits, false),
             num_hashes: num_hashes,
-            hash_builder_one: RandomState::new(),
-            hash_builder_two: RandomState::new(),
+            hash_builder_one,
+            hash_builder_two,
         }
     }
 
     /// create a BloomFilter that expects to hold
     /// `expected_num_items`.  The filter will be sized to have a
     /// false positive rate of the value specified in `rate`.
-    pub fn with_rate(rate: f32, expected_num_items: u32) -> BloomFilter<RandomState, RandomState> {
+    pub fn with_rate(
+        rate: f32,
+        expected_num_items: u32,
+        hash_states: (RandomState, RandomState),
+    ) -> BloomFilter<RandomState, RandomState> {
         let bits = needed_bits(rate, expected_num_items);
-        BloomFilter::with_size(bits, optimal_num_hashes(bits, expected_num_items))
+        BloomFilter::with_size(
+            bits,
+            optimal_num_hashes(bits, expected_num_items),
+            hash_states,
+        )
     }
 
     /// Get the number of bits this BloomFilter is using
@@ -137,7 +172,7 @@ impl BloomFilter<RandomState, RandomState> {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
-    fn union(&mut self, other: &BloomFilter) -> bool {
+    pub(crate) fn union(&mut self, other: &BloomFilter) -> bool {
         self.bits.or(&other.bits)
     }
 }
@@ -226,4 +261,37 @@ pub fn optimal_num_hashes(num_bits: usize, num_items: u32) -> u32 {
 pub fn needed_bits(false_pos_rate: f32, num_items: u32) -> usize {
     let ln22 = core::f32::consts::LN_2 * core::f32::consts::LN_2;
     (num_items as f32 * ((1.0 / false_pos_rate).ln() / ln22)).round() as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Build a static bloom filter for testing. Not meant to be inserted into.
+    fn get_static_bloom_filter(bits: BitVec) -> BloomFilter {
+        let state = RandomState::new();
+
+        BloomFilter {
+            bits,
+            num_hashes: 0,
+            hash_builder_one: state.clone(),
+            hash_builder_two: state.clone(),
+        }
+    }
+
+    #[test]
+    fn test_distance() {
+        let b1 = get_static_bloom_filter(BitVec::from_bytes(&[0b00101101]));
+        let b2 = get_static_bloom_filter(BitVec::from_bytes(&[0b10100111]));
+        let expected_distance = 3;
+
+        let b_none = get_static_bloom_filter(BitVec::from_bytes(&[0b00000000]));
+        let b_all = get_static_bloom_filter(BitVec::from_bytes(&[0b11111111]));
+
+        assert_eq!(b1.distance(&b2), expected_distance);
+        assert_eq!(b2.distance(&b1), expected_distance);
+        assert_eq!(b1.distance(&b1), 0);
+        assert_eq!(b2.distance(&b2), 0);
+        assert_eq!(b_none.distance(&b_all), 8);
+    }
 }
