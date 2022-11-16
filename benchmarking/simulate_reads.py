@@ -8,6 +8,13 @@ Usage:
 
 Example:
     python benchmarking/simulate_reads.py genomes/GCF_000912255.1_ViralProj226726_genomic.fna 1000 simulated_reads.fa 100
+
+For many genomes:
+```bash
+    for genome in examples/genomes/viral_genome_dir/*; \
+    do python benchmarking/simulate_reads.py $file 1000 \
+    simulated_reads.fa 1000; done
+```
 """
 import sys
 import random 
@@ -27,7 +34,7 @@ def parse_fasta(file_name):
             if count > 0:
                 genome += line.strip("\n")
             else:
-                name = line.strip(">").strip("\n")
+                name = line.strip(">").strip("\n").split(" ")[0]
             line = f.readline()
             count += 1
     return genome, name
@@ -41,7 +48,7 @@ def simulate_reads(genome, name, read_count, outfile, readlength=100):
     reads_added = 0
     with open(outfile, "a+") as out:
         while reads_added < read_count:
-            start = random.randint(0, len(genome)-1)
+            start = random.randint(0, len(genome)-read_length)
             stop = start + readlength
             read = genome[start:stop]
             out.write(f">{name}_{reads_added}\n{read}\n")
