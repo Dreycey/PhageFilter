@@ -1,5 +1,11 @@
 """
 Used for testing the output of PhageFilter.
+
+Usage:
+    python benchmarking/test_output.py <simulated reads> <output file>
+
+Example:
+    python benchmarking/test_output.py examples/test_reads/simulated_reads.fa genomes_in_file.txt 
 """
 import sys
 import numpy as np
