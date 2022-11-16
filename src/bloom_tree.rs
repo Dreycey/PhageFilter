@@ -4,44 +4,43 @@ use rand::Rng;
 use std::collections::hash_map::RandomState;
 
 #[derive(Debug)]
-struct BloomTree<R = RandomState, S = RandomState> {
-    root: Option<Box<BloomNode>>,
+pub(crate) struct BloomTree<R = RandomState, S = RandomState> {
+    pub(crate) root: Option<Box<BloomNode>>,
 
     // Size of kmers in the bloom filters
-    kmer_size: usize,
+    pub(crate) kmer_size: usize,
 
     // Random states to seed hash functions from. If we use the same random states to seed hash functions, we'll get the same exact hash functions. We need this property since we'll be unioning bloom trees.
-    hash_states: (R, S),
+    pub(crate) hash_states: (R, S),
 }
 
 #[derive(Clone, Debug)]
-struct BloomNode {
-    left_child: Option<Box<BloomNode>>,
-    right_child: Option<Box<BloomNode>>,
-    bloom_filter: BloomFilter,
+pub(crate) struct BloomNode {
+    pub(crate) left_child: Option<Box<BloomNode>>,
+    pub(crate) right_child: Option<Box<BloomNode>>,
+    pub(crate) bloom_filter: BloomFilter,
 
     /// NCBI Taxonomy ID for the genome
-    tax_id: Option<String>,
+    pub(crate) tax_id: Option<String>,
 
     /// Count of reads that have mapped to this node
-    mapped_reads: u32,
+    pub(crate) mapped_reads: usize,
 }
 
 /// RandomState doesn't support equality comparisons so we ignore the hash_states when comparing BloomTrees.
 impl PartialEq for BloomTree<RandomState, RandomState> {
     fn eq(&self, other: &Self) -> bool {
-        self.root == other.root
-        && self.kmer_size == other.kmer_size
+        self.root == other.root && self.kmer_size == other.kmer_size
     }
 }
 
 impl PartialEq for BloomNode {
     fn eq(&self, other: &Self) -> bool {
         self.left_child == other.left_child
-        && self.right_child == other.right_child
-        && self.bloom_filter == other.bloom_filter
-        && self.tax_id == other.tax_id
-        && self.mapped_reads == other.mapped_reads
+            && self.right_child == other.right_child
+            && self.bloom_filter == other.bloom_filter
+            && self.tax_id == other.tax_id
+            && self.mapped_reads == other.mapped_reads
     }
 }
 
@@ -177,9 +176,16 @@ impl BloomNode {
             mapped_reads: 0,
         }
     }
+
+    pub(crate) fn is_leafnode(&self) -> bool {
+        return self.left_child.is_none() && self.right_child.is_none();
+    }
 }
 
-pub fn create_bloom_tree(parsed_genomes: Vec<file_parser::RecordTypes>, kmer_size: &usize) {
+pub(crate) fn create_bloom_tree(
+    parsed_genomes: Vec<file_parser::RecordTypes>,
+    kmer_size: &usize,
+) -> BloomTree {
     // create initial bloom tree
     let mut bloom_tree = BloomTree::new(*kmer_size);
     // add genomes to bloom tree
@@ -188,11 +194,12 @@ pub fn create_bloom_tree(parsed_genomes: Vec<file_parser::RecordTypes>, kmer_siz
         println!("NEW GENOME added to bloom tree");
     }
     // print final bloom tree
-    println!("\n\n In-Order traversal of bloom tree: \n");
-    traverse_bloom_tree(&bloom_tree.root.unwrap());
+    // println!("\n\n In-Order traversal of bloom tree: \n");
+    // traverse_bloom_tree(&bloom_tree.root.unwrap());
 
     // get leaf counts
     //get_leaf_counts(&bloom_tree.root.unwrap());
+    return bloom_tree;
 }
 
 fn traverse_bloom_tree(bloom_node: &BloomNode) {
@@ -218,7 +225,7 @@ fn traverse_bloom_tree(bloom_node: &BloomNode) {
     }
 }
 
-fn get_leaf_counts(bloom_node: &BloomNode) {
+pub(crate) fn get_leaf_counts(bloom_node: &BloomNode) {
     // traverse left children
     match (&bloom_node.left_child, &bloom_node.right_child) {
         (None, None) => println!(
@@ -234,23 +241,27 @@ fn get_leaf_counts(bloom_node: &BloomNode) {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bio::io::fasta;
     use crate::file_parser::RecordTypes;
+    use bio::io::fasta;
 
     #[test]
     fn test_empty_tree_insert() {
         let kmer_size = 5;
         let mut tree = BloomTree::new(kmer_size);
         let record_id = "test";
-        let record = RecordTypes::FastaRecord(fasta::Record::with_attrs(record_id, None, "ATCAG".as_ref()));
-        let mut expected_root = Box::new(BloomNode::new(tree.hash_states.clone(), Some(record_id.to_string())));
+        let record =
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(record_id, None, "ATCAG".as_ref()));
+        let mut expected_root = Box::new(BloomNode::new(
+            tree.hash_states.clone(),
+            Some(record_id.to_string()),
+        ));
         // The root's bloom filter should just be the bloom filter you get from the record
-        expected_root.bloom_filter.union(&tree.init_leaf(&record).bloom_filter);
+        expected_root
+            .bloom_filter
+            .union(&tree.init_leaf(&record).bloom_filter);
         let expected_tree = BloomTree {
             root: Some(expected_root),
             kmer_size: kmer_size,
@@ -277,12 +288,16 @@ mod tests {
         }
 
         let expected_leaves = records.map(|r| tree.init_leaf(&r));
-        let mut expected_root = Box::new(BloomNode::new(tree.hash_states.clone(), tree.root.clone().unwrap().tax_id));
+        let mut expected_root = Box::new(BloomNode::new(
+            tree.hash_states.clone(),
+            tree.root.clone().unwrap().tax_id,
+        ));
         // The leaves should under a parent node that has the union of their bloom filters
         for leaf in &expected_leaves {
             expected_root.bloom_filter.union(&leaf.bloom_filter);
         }
-        [expected_root.left_child, expected_root.right_child] = expected_leaves.map(|node| Some(node));
+        [expected_root.left_child, expected_root.right_child] =
+            expected_leaves.map(|node| Some(node));
 
         let expected_tree = BloomTree {
             root: Some(expected_root),
@@ -318,15 +333,33 @@ mod tests {
         //              /              \
         //            /                 \
         //    (test1, ATCAG)      (test3, ATCAG)
-        let mut expected_root = Box::new(BloomNode::new(tree.hash_states.clone(), tree.root.clone().unwrap().tax_id));
+        let mut expected_root = Box::new(BloomNode::new(
+            tree.hash_states.clone(),
+            tree.root.clone().unwrap().tax_id,
+        ));
         // The leaves should under a parent node that has the union of their bloom filters
         for leaf in &expected_leaves {
             expected_root.bloom_filter.union(&leaf.bloom_filter);
         }
-        let mut inner_left_node = Box::new(BloomNode::new(tree.hash_states.clone(), tree.root.clone().unwrap().left_child.clone().unwrap().tax_id));
+        let mut inner_left_node = Box::new(BloomNode::new(
+            tree.hash_states.clone(),
+            tree.root
+                .clone()
+                .unwrap()
+                .left_child
+                .clone()
+                .unwrap()
+                .tax_id,
+        ));
         // The left inner node's bloom filter should be identical to the first and third leaves bloom filters (since they have the same sequence)
-        inner_left_node.bloom_filter.union(&expected_leaves[0].bloom_filter);
-        [inner_left_node.left_child, expected_root.right_child, inner_left_node.right_child] = expected_leaves.map(|node| Some(node));
+        inner_left_node
+            .bloom_filter
+            .union(&expected_leaves[0].bloom_filter);
+        [
+            inner_left_node.left_child,
+            expected_root.right_child,
+            inner_left_node.right_child,
+        ] = expected_leaves.map(|node| Some(node));
         expected_root.left_child = Some(inner_left_node);
 
         let expected_tree = BloomTree {
@@ -363,15 +396,33 @@ mod tests {
         //                       /              \
         //                     /                 \
         //              (test2, TTTAG)     (test3, TTTAG)
-        let mut expected_root = Box::new(BloomNode::new(tree.hash_states.clone(), tree.root.clone().unwrap().tax_id));
+        let mut expected_root = Box::new(BloomNode::new(
+            tree.hash_states.clone(),
+            tree.root.clone().unwrap().tax_id,
+        ));
         // The leaves should under a parent node that has the union of their bloom filters
         for leaf in &expected_leaves {
             expected_root.bloom_filter.union(&leaf.bloom_filter);
         }
-        let mut inner_right_node = Box::new(BloomNode::new(tree.hash_states.clone(), tree.root.clone().unwrap().right_child.clone().unwrap().tax_id));
+        let mut inner_right_node = Box::new(BloomNode::new(
+            tree.hash_states.clone(),
+            tree.root
+                .clone()
+                .unwrap()
+                .right_child
+                .clone()
+                .unwrap()
+                .tax_id,
+        ));
         // The right inner node's bloom filter should be identical to the second and third leaves bloom filters (since they have the same sequence)
-        inner_right_node.bloom_filter.union(&expected_leaves[1].bloom_filter);
-        [expected_root.left_child, inner_right_node.left_child, inner_right_node.right_child] = expected_leaves.map(|node| Some(node));
+        inner_right_node
+            .bloom_filter
+            .union(&expected_leaves[1].bloom_filter);
+        [
+            expected_root.left_child,
+            inner_right_node.left_child,
+            inner_right_node.right_child,
+        ] = expected_leaves.map(|node| Some(node));
         expected_root.right_child = Some(inner_right_node);
 
         let expected_tree = BloomTree {
@@ -380,6 +431,10 @@ mod tests {
             hash_states: tree.hash_states.clone(),
         };
 
-        assert_eq!(tree, expected_tree, "Test failed for {:#?} and {:#?}", tree, expected_tree);
+        assert_eq!(
+            tree, expected_tree,
+            "Test failed for {:#?} and {:#?}",
+            tree, expected_tree
+        );
     }
 }

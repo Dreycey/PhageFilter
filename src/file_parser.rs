@@ -4,7 +4,7 @@ use bio::io::fastq;
 use std::fs;
 use std::fs::metadata;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RecordTypes {
     FastaRecord(fasta::Record),
     FastqRecord(fastq::Record),
@@ -77,18 +77,17 @@ pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
     let md = metadata(genomes_path).unwrap();
     let mut records_arr: Vec<RecordTypes> = vec![];
     if md.is_dir() {
-        let paths = fs::read_dir(genomes_path).unwrap()
-            .filter(|p| match p {
-                Ok(s) => match s.path().extension() {
-                    Some(ext) => {
-                        // Only use paths that have a supported extension
-                        supported_extensions.contains(&ext.to_str().unwrap())
-                    },
-                    None => false
+        let paths = fs::read_dir(genomes_path).unwrap().filter(|p| match p {
+            Ok(s) => match s.path().extension() {
+                Some(ext) => {
+                    // Only use paths that have a supported extension
+                    supported_extensions.contains(&ext.to_str().unwrap())
                 }
-                // Propagate errors
-                _ => true,
-            });
+                None => false,
+            },
+            // Propagate errors
+            _ => true,
+        });
         for path in paths {
             let mut tmp_arr: Vec<RecordTypes> =
                 parse_genome_file(&path.unwrap().path().to_str().unwrap().to_string());
@@ -186,7 +185,6 @@ fn fastq_parser(file_path: &String) -> Vec<RecordTypes> {
     return records_arr;
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,10 +195,13 @@ mod tests {
         assert_eq!(get_kmers(&vec![], &1), Vec::<Vec<u8>>::new());
 
         // Cannot get kmers of length 0
-        assert_eq!(get_kmers(&vec![1,2,3], &0), Vec::<Vec<u8>>::new());
+        assert_eq!(get_kmers(&vec![1, 2, 3], &0), Vec::<Vec<u8>>::new());
 
-        assert_eq!(get_kmers(&vec![1,2,3], &1), vec![vec![1],vec![2],vec![3]]);
-        assert_eq!(get_kmers(&vec![1,2,3], &2), vec![vec![1,2],vec![2,3]]);
-        assert_eq!(get_kmers(&vec![1,2,3], &3), vec![vec![1,2,3]]);
+        assert_eq!(
+            get_kmers(&vec![1, 2, 3], &1),
+            vec![vec![1], vec![2], vec![3]]
+        );
+        assert_eq!(get_kmers(&vec![1, 2, 3], &2), vec![vec![1, 2], vec![2, 3]]);
+        assert_eq!(get_kmers(&vec![1, 2, 3], &3), vec![vec![1, 2, 3]]);
     }
 }

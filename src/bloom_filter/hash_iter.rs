@@ -1,6 +1,6 @@
 // utilities for hashing
 use std::hash::{BuildHasher, Hash, Hasher};
-pub struct HashIter {
+pub(in crate::bloom_filter) struct HashIter {
     h1: u64,
     h2: u64,
     i: u32,

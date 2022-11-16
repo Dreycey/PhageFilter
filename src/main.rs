@@ -2,6 +2,7 @@ mod bloom_filter;
 use bloom_filter::ASMS;
 mod bloom_tree;
 mod file_parser;
+mod query;
 use clap::{arg, ArgMatches, Command};
 use rayon::prelude::*;
 use std::fs::File;
@@ -27,6 +28,11 @@ fn main() {
         .expect("kmer size required")
         .parse::<usize>()
         .unwrap();
+    let threshold: f32 = matches
+        .get_one::<String>("threshold")
+        .expect("threshold required")
+        .parse::<f32>()
+        .unwrap();
 
     // number of threads to run
     rayon::ThreadPoolBuilder::new()
@@ -37,18 +43,16 @@ fn main() {
     // obtain genomes from fasta/fastq files
     let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
 
-    bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
-    // // create a bloom filter
-    // let mut bloom_filter = bloom_filter::get_bloom_filter(parsed_genomes.len());
-
-    // // add genomes to the bloom filter
-    // bloom_tree::add_to_bloom(parsed_genomes, &kmer_size, &mut bloom_filter);
+    // build: bloom tree
+    let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
 
     // // open output file to write to
     // let out_file = File::create(out_file_path).unwrap();
 
-    // // parse reads and check for presence in the bloom filter.
-    // let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
+    // parse reads and check for presence in the bloom tree.
+    let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
+    bloom_node = query::query_batch(bloom_node, parsed_reads, threshold);
+    bloom_tree::get_leaf_counts(&bloom_node.root.unwrap());
     // check_if_in_bloom_filter(parsed_reads, &kmer_size, &mut bloom_filter, &out_file);
 }
 
@@ -57,7 +61,7 @@ fn parse_cmdline() -> ArgMatches {
     let matches = Command::new("PhageFilter")
         .version("2.0")
         .author("Dreycey Albin <albindreycey@gmail.com>")
-        .about("A fast, simple, and efficient way to filter reads from metagenomic data")
+        .about("A fast, simple, and efficient method for taxonomic classification.")
         .arg(
             arg!(--genomes <VALUE>)
                 .required(true)
@@ -96,6 +100,14 @@ fn parse_cmdline() -> ArgMatches {
                 .long("kmer_size")
                 .help("Size of the kmer to use; use with caution!")
                 .default_value("20"), //.about("Number of threads to process"),
+        )
+        .arg(
+            arg!(--threshold <VALUE>)
+                .required(false)
+                .short('q')
+                .long("threshold")
+                .help("Filtering theshold (Number of kmers needed to pass)")
+                .default_value("1.0"), //.about("Number of threads to process"),
         )
         .get_matches();
 
