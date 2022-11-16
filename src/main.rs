@@ -42,15 +42,16 @@ fn main() {
     // build: bloom tree
     let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
 
-    // // open output file to write to
+    // open output file to write to
     let mut out_file = File::create(out_file_path).unwrap();
 
     // parse reads and check for presence in the bloom tree.
     print!("Querying reads...");
     let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
     bloom_node = query::query_batch(bloom_node, parsed_reads, threshold);
+
+    // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
     query::get_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
-    // check_if_in_bloom_filter(parsed_reads, &kmer_size, &mut bloom_filter, &out_file);
 }
 
 fn parse_cmdline() -> ArgMatches {

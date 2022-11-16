@@ -1,3 +1,13 @@
+/// Methods and definitions for a BloomTree and BloomNodes
+/// within the BloomTree. These methods allow for creating
+/// a bloom tree for a set of given genomes.
+///
+///
+/// # Example Usage
+///
+/// ```rust
+/// let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
+/// ```
 use crate::bloom_filter::{get_bloom_filter, BloomFilter, DistanceChecker, ASMS};
 use crate::file_parser;
 use rand::Rng;

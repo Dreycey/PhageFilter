@@ -1,3 +1,17 @@
+/// Methods for querying a bloom tree given a
+/// vector of reads. These methods allow for querying
+/// the bloom tree as well as saving leaf nodes that
+/// have reads mapped.
+///
+///
+/// # Example Usage
+///
+/// ```rust
+/// let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
+/// let mut out_file = File::create(out_file_path).unwrap();
+/// bloom_node = query::query_batch(bloom_node, parsed_reads, threshold);
+/// query::get_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
+/// ```
 use crate::bloom_filter::ASMS;
 use crate::bloom_tree::{BloomNode, BloomTree};
 use crate::file_parser;

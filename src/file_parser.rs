@@ -1,3 +1,11 @@
+/// Methods for parsing individual or a directory
+/// of Fasta or Fastq files.
+///
+/// # Example Usage
+///
+/// ```rust
+/// let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
+/// ```
 use bio::alphabets::dna;
 use bio::io::fasta;
 use bio::io::fastq;
