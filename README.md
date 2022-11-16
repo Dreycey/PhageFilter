@@ -1,3 +1,4 @@
+![workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/rust.yml/badge.svg)
 ![phage filter logo](misc/PhageFilterLogo.png)
 
 # PhageFilter
@@ -27,5 +28,5 @@ Options:
 - Using on simulated reads with 7 threads.
 
 ```bash
-cargo run -- -g examples/genomes/viral_genome_dir/ -r examples/test_reads/simulated_reads.fa -t 6 --out genomes_in_file.txt -k 15 -q 1
+cargo run -- -g examples/genomes/viral_genome_dir/ -r examples/test_reads/simulated_reads.fa -t 6 --out genomes_in_file.txt -k 20 -q 1
 ```
