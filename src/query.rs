@@ -1,8 +1,25 @@
-use crate::bloom_filter::{get_bloom_filter, BloomFilter, DistanceChecker, ASMS};
+use crate::bloom_filter::ASMS;
 use crate::bloom_tree::{BloomNode, BloomTree};
 use crate::file_parser;
 use rayon::prelude::*;
+use std::fs::File;
+use std::io::Write;
 
+/// Used to evaluate if a given read contains the same kmers as a given
+/// node. This is performed using the bloom filters. A given threshold
+/// determines the stringency of the filter.
+///
+/// # Parameters
+/// - `bloom_node`: A BloomNode node allocated on the heap (Box<BloomNode>)
+/// - `read`: A reference to a single instance of file_parser::RecordTypes.
+/// - `threshold`: The threshold for counting a read as a hit. (a float, 0-1)
+/// - `kmer_size`: The kmer size used in the bloom tree.
+///
+/// # Returns
+/// - True if the read contains the same kmers, false otherwise.
+///
+/// # Panics
+/// - N/A
 fn query_passes(
     bloom_node: &Box<BloomNode>,
     read: &file_parser::RecordTypes,
@@ -15,16 +32,24 @@ fn query_passes(
         .iter()
         .filter(|kmer| bloom_node.bloom_filter.contains(kmer))
         .count();
-    let cutoff = (threshold * kmers.len() as f32).ceil() as usize;
-    println!(
-        "possible kmers: {:#?}, cutoff: {:#?}, number of matches: {:#?}",
-        kmers.len(),
-        cutoff,
-        num_matches
-    );
     return num_matches >= (threshold * kmers.len() as f32).ceil() as usize;
 }
 
+/// Given a BloomTree, this method uses `_query_batch` by passing
+/// the root node of the bloom tree, given it exists. Likewise, it
+/// passes the kmersize of the bloom tree to the `_query_batch`
+/// method.
+///
+/// # Parameters
+/// - `bloom_node`: A BloomNode node allocated on the heap (Box<BloomNode>)
+/// - `read_set`: A vector of file_parser::RecordTypes, representing all reads.
+/// - `threshold`: The threshol for counting a read as a hit. (a float, 0-1)
+///
+/// # Returns
+/// - The BloomTree after mapping all given reads to leaf nodes.
+///
+/// # Panics
+/// - N/A
 pub(crate) fn query_batch(
     mut bloom_tree: BloomTree,
     read_set: Vec<file_parser::RecordTypes>,
@@ -42,6 +67,21 @@ pub(crate) fn query_batch(
     return bloom_tree;
 }
 
+/// Given a root node, this method queries all children nodes
+/// recursively, until a leaf node is found. This method performs
+/// this operation in batch, allowing for a parrallelized query.
+///
+/// # Parameters
+/// - `bloom_node`: A BloomNode node allocated on the heap (Box<BloomNode>)
+/// - `read_set`: A vector of file_parser::RecordTypes, representing all reads.
+/// - `threshold`: The threshol for counting a read as a hit. (a float, 0-1)
+/// - `kmer_size`: The kmer size used in the bloom tree.
+///
+/// # Returns
+/// - The BloomNode after evulating itself and all its children (used recursively).
+///
+/// # Panics
+/// - N/A
 fn _query_batch(
     mut bloom_node: Box<BloomNode>,
     read_set: Vec<file_parser::RecordTypes>,
@@ -85,6 +125,63 @@ fn _query_batch(
     }
 
     return bloom_node;
+}
+
+/// Recursively traverses the bloom tree, saving
+/// lead node mappings to a specified output file.
+///
+/// # Parameters
+/// - `bloom_node`: A leaf node of the type `BloomNode`
+/// - `output_file`: A `File` object that may be written to.
+///
+/// # Returns
+/// - ()
+///
+/// # Panics
+/// - N/A
+pub(crate) fn get_leaf_counts(bloom_node: &BloomNode, output_file: &mut File) {
+    match (&bloom_node.left_child, &bloom_node.right_child) {
+        // leaf node
+        (None, None) => save_mappings(bloom_node, output_file),
+        // traverse right child
+        (None, Some(l_child)) => get_leaf_counts(l_child, output_file),
+        // traverse left child
+        (Some(r_child), None) => get_leaf_counts(r_child, output_file),
+        // traverse left and right child
+        (Some(r_child), Some(l_child)) => {
+            get_leaf_counts(l_child, output_file);
+            get_leaf_counts(r_child, output_file)
+        }
+    }
+}
+
+/// Saves the leaf counts to an output file.
+///
+/// # Parameters
+/// - `bloom_node`: A leaf node of the type `BloomNode`
+/// - `output_file`: A `File` object that may be written to.
+///
+/// # Returns
+/// - ()
+///
+/// # Panics
+/// - Panics if there is an error wrting to the output file.
+fn save_mappings(bloom_node: &BloomNode, output_file: &mut File) {
+    println!(
+        "{},{}\n",
+        bloom_node.tax_id.as_deref().unwrap(),
+        bloom_node.mapped_reads
+    );
+    if bloom_node.mapped_reads > 0 {
+        let tax_maps: String = format!(
+            "{},{}\n",
+            bloom_node.tax_id.as_deref().unwrap(),
+            bloom_node.mapped_reads
+        );
+        output_file
+            .write(tax_maps.as_bytes())
+            .expect("problem writing to output file!");
+    }
 }
 
 #[cfg(test)]

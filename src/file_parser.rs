@@ -10,6 +10,17 @@ pub enum RecordTypes {
     FastqRecord(fastq::Record),
 }
 
+/// Returns the lexographically smallest kmer between a
+/// given kmer and it's reverse compliment.
+///
+/// # Parameters
+/// - `kmer`: The given kmer in u8
+///
+/// # Returns
+/// - lexographically smallest kmer
+///
+/// # Panics
+/// - N/A
 fn get_lex_less(kmer: Vec<u8>) -> Vec<u8> {
     let kmer_revc: Vec<u8> = dna::revcomp(&kmer);
     for index in 0..kmer.len() {
@@ -22,10 +33,23 @@ fn get_lex_less(kmer: Vec<u8>) -> Vec<u8> {
     return kmer; // if equal.
 }
 
+/// Returns the kmers for a given sequence.
+///
+/// # Parameters
+/// - `kmer`: The given kmer in u8
+///
+/// # Returns
+/// - A vector containing the kmers for the given sequence, in u8.
+///   the output vector is of type Vec<Vec<u8>>.
+///
+/// # Panics
+/// - if the given sequence is not as long as the given kmer size. or if less/equal to zero.
 pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
-    if kmer_size > sequence.len() || kmer_size == 0 {
+    if kmer_size > sequence.len() || kmer_size <= 0 {
         // Can't get kmers of a size longer than the sequence
         // Can't get kmers of size 0
+        //panic!("The kmer size is greater than the query or input genome!");
+        //println!("{:?}", sequence);
         return vec![];
     }
 
@@ -38,6 +62,16 @@ pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
     max_kmers
 }
 
+/// Returns the sequence from a RecordTypes enum.
+///
+/// # Parameters
+/// - `genome`: May be a read or a genome, of enum type RecordTypes
+///
+/// # Returns
+/// - The sequence from a RecordTypes enum, of type Vec<u8>
+///
+/// # Panics
+/// - N/A
 pub fn get_sequence(genome: &RecordTypes) -> Vec<u8> {
     let sequence: Vec<u8> = match genome {
         RecordTypes::FastaRecord(record) => record.seq().to_vec(),
@@ -46,6 +80,16 @@ pub fn get_sequence(genome: &RecordTypes) -> Vec<u8> {
     sequence
 }
 
+/// Returns the sequence ID from a RecordTypes enum.
+///
+/// # Parameters
+/// - `genome`: May be a read or a genome, of enum type RecordTypes
+///
+/// # Returns
+/// - The sequence ID from a RecordTypes enum, of type Vec<u8>
+///
+/// # Panics
+/// - N/A
 pub fn get_id(genome: &RecordTypes) -> &str {
     let sequence: &str = match genome {
         RecordTypes::FastaRecord(record) => record.id(),
@@ -54,24 +98,21 @@ pub fn get_id(genome: &RecordTypes) -> &str {
     sequence
 }
 
-/// get_genomes(genomes_path: &String)
-/// --
-/// obtains a list of genome objects given a genome directory,
+/// Obtains a list of genome objects given a genome directory,
 /// or a genome file (i.e. fasta or fastq)
 ///
-/// Parameters
-/// ----------
-///
-/// Returns
-/// -------
-///
-/// Notes
-/// -----
+/// # Notes
 /// 1. TODO: This stores all of the reads into memory, using iterator
 ///          may be prefered
-/// Examples
-/// --------
 ///
+/// # Parameters
+/// - `genomes_path`: global path to the genome/read files (Fasta or Fastq, or directory).
+///
+/// # Returns
+/// - A vector of RecordTypes (Vec<RecordTypes>)
+///
+/// # Panics
+/// - N/A
 pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
     let supported_extensions = ["fa", "fasta", "fna", "fq", "fastq"];
     let md = metadata(genomes_path).unwrap();
@@ -102,23 +143,21 @@ pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
     }
 }
 
-/// parse_genome_file(genomes_file_path: &String)
-/// --
-/// obtains a list of genome objects given a genome file (i.e. fasta or fastq)
+/// Obtains a list of genome objects given a genome directory,
+/// or a genome file (i.e. fasta or fastq)
 ///
-/// Parameters
-/// ----------
-///
-/// Returns
-/// -------
-///
-/// Notes
-/// -----
+/// # Notes
 /// 1. TODO: This stores all of the reads into memory, using iterator
 ///          may be prefered
-/// Examples
-/// --------
 ///
+/// # Parameters
+/// - `genomes_path`: global path to the genome/read files (Fasta or Fastq, or directory).
+///
+/// # Returns
+/// - A vector of RecordTypes (Vec<RecordTypes>)
+///
+/// # Panics
+/// - N/A
 fn parse_genome_file(genomes_file_path: &String) -> Vec<RecordTypes> {
     //println!("\nParsing file: {}\n", genomes_file_path);
     if genomes_file_path.ends_with(".fa")
@@ -133,23 +172,20 @@ fn parse_genome_file(genomes_file_path: &String) -> Vec<RecordTypes> {
     }
 }
 
-/// fasta_parser(file_path: &String)
-/// --
-/// parses a fasta file.
+/// This method parses a fasta file.
 ///
-/// Parameters
-/// ----------
-///
-/// Returns
-/// -------
-///
-/// Notes
-/// -----
+/// # Notes
 /// 1. TODO: This stores all of the reads into memory, using iterator
 ///          may be prefered
-/// Examples
-/// --------
 ///
+/// # Parameters
+/// - `file_path`: global path to the individual genome/read file (Fasta).
+///
+/// # Returns
+/// - A vector of RecordTypes (Vec<RecordTypes>)
+///
+/// # Panics
+/// - N/A
 fn fasta_parser(file_path: &String) -> Vec<RecordTypes> {
     let reader = fasta::Reader::from_file(file_path).unwrap();
     let mut records_arr: Vec<RecordTypes> = vec![];
@@ -159,23 +195,20 @@ fn fasta_parser(file_path: &String) -> Vec<RecordTypes> {
     return records_arr;
 }
 
-/// fastq_parser(file_path: &String)
-/// --
-/// parses a fastq file.
+/// This method parses a fastq file.
 ///
-/// Parameters
-/// ----------
-///
-/// Returns
-/// -------
-///
-/// Notes
-/// -----
+/// # Notes
 /// 1. TODO: This stores all of the reads into memory, using iterator
 ///          may be prefered
-/// Examples
-/// --------
 ///
+/// # Parameters
+/// - `file_path`: global path to the individual genome/read file (Fastq).
+///
+/// # Returns
+/// - A vector of RecordTypes (Vec<RecordTypes>)
+///
+/// # Panics
+/// - N/A
 fn fastq_parser(file_path: &String) -> Vec<RecordTypes> {
     let reader = fastq::Reader::from_file(file_path).unwrap();
     let mut records_arr: Vec<RecordTypes> = vec![];

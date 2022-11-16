@@ -29,12 +29,20 @@ pub(crate) struct BloomNode {
 
 /// RandomState doesn't support equality comparisons so we ignore the hash_states when comparing BloomTrees.
 impl PartialEq for BloomTree<RandomState, RandomState> {
+    /// Check if 2 BloomTrees are equal
+    ///
+    /// # Returns
+    /// - a bool of whether the given BloomTrees are equal.
     fn eq(&self, other: &Self) -> bool {
         self.root == other.root && self.kmer_size == other.kmer_size
     }
 }
 
 impl PartialEq for BloomNode {
+    /// Check if 2 BloomNodes are equal
+    ///
+    /// # Returns
+    /// - a bool of whether the given BloomNodes are equal.
     fn eq(&self, other: &Self) -> bool {
         self.left_child == other.left_child
             && self.right_child == other.right_child
@@ -45,6 +53,13 @@ impl PartialEq for BloomNode {
 }
 
 impl BloomTree<RandomState, RandomState> {
+    /// Construct a new BloomTree
+    ///
+    /// # Parameters
+    /// - `kmer_size`: The kmer size the tree will use for both building and queries.
+    ///
+    /// # Returns
+    /// - a BloomTree instance.
     fn new(kmer_size: usize) -> Self {
         BloomTree {
             root: None,
@@ -54,6 +69,14 @@ impl BloomTree<RandomState, RandomState> {
         }
     }
 
+    /// A wrapper function to add either create a root node,
+    /// or add a new genome to the tree.
+    ///
+    /// # Parameters
+    /// - `genome`: a reference to the genome (file_parser::RecordTypes)
+    ///
+    /// # Returns
+    /// - self, a BloomTree instance.
     fn insert(mut self, genome: &file_parser::RecordTypes) -> Self {
         // Create new leaf.
         let node: Box<BloomNode> = self.init_leaf(genome);
@@ -67,6 +90,15 @@ impl BloomTree<RandomState, RandomState> {
         return self;
     }
 
+    /// Initializes a leaf node with the given genome. Returns
+    /// a new BloomNode with the generated bloom filter for the
+    /// genomes kmers.
+    ///
+    /// # Parameters
+    /// - `genome`: a reference to the genome (file_parser::RecordTypes)
+    ///
+    /// # Returns
+    /// - A new BloomNode, representing a to-be leaf node.
     fn init_leaf(&self, genome: &file_parser::RecordTypes) -> Box<BloomNode> {
         // parse information from the input file
         let id: &str = file_parser::get_id(&genome);
@@ -86,6 +118,16 @@ impl BloomTree<RandomState, RandomState> {
         return node;
     }
 
+    /// Returns an internal node, given two nodes containing
+    /// genomes (i.e. to-be leaf nodes).
+    ///
+    /// # Parameters
+    /// - `current_node`: BloomNode representating a leaf node already in the tree.
+    /// - `new_node`: The BloomNode being added to the tree.
+    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    ///
+    /// # Returns
+    /// - The new internal node, with children being the given leaf nodes.
     fn init_internal_node(
         current_node: Box<BloomNode>,
         new_node: Box<BloomNode>,
@@ -112,6 +154,23 @@ impl BloomTree<RandomState, RandomState> {
         return node;
     }
 
+    /// Adds a BloomNode to a given BloomTree.
+    ///
+    /// # Description
+    /// This method traverses a BloomTree, adding a BloomNode where best fit
+    /// in a greedy manner. This works by checking if the current node has children.
+    /// If it has 2 children, then it will choose which one to check next based on the
+    /// minimum hamming distance. If it as 1 child, it add the new node to the current node.
+    /// If it's a leaf, then it create a new interal node, with the children being the new node
+    /// and the current node.
+    ///
+    /// # Parameters
+    /// - `current_node`: The current BloomNode being evaluated (used recursively).
+    /// - `node`: The BloomNode being added to the tree.
+    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    ///
+    /// # Returns
+    /// - The current node after modification to self or children.
     fn add_to_tree(
         mut current_node: Box<BloomNode>,
         node: Box<BloomNode>,
@@ -166,6 +225,14 @@ impl BloomTree<RandomState, RandomState> {
 }
 
 impl BloomNode {
+    /// Returns an instance of a BloomNode.
+    ///
+    /// # Parameters
+    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    /// - `tax_id`: The taxonimic identifier for the genome, or the NCBI accession.
+    ///
+    /// # Returns
+    /// - a bool of whether the node is a leaf node.
     fn new(hash_states: (RandomState, RandomState), tax_id: Option<String>) -> Self {
         BloomNode {
             // initializes random hash state to use for the whole tree
@@ -177,11 +244,31 @@ impl BloomNode {
         }
     }
 
+    /// Returns bool indicating whether the node is
+    /// a leaf node.
+    ///
+    /// # Parameters
+    /// - N/A
+    ///
+    /// # Returns
+    /// - a bool of whether the node is a leaf node.
     pub(crate) fn is_leafnode(&self) -> bool {
         return self.left_child.is_none() && self.right_child.is_none();
     }
 }
 
+/// Given a vector of genomes (as type file_parser::RecordTypes),
+/// this method returns a `BloomTree`.
+///
+/// # Parameters
+/// - `parsed_genomes`: A vector of genomes, of the type file_parser::RecordTypes
+/// - `kmer_size`: The kmer size for building the tree.
+///
+/// # Returns
+/// - a bloom tree containing the genomes, of the type BloomTree
+///
+/// # Panics
+/// - if kmer_size is great than genome size.
 pub(crate) fn create_bloom_tree(
     parsed_genomes: Vec<file_parser::RecordTypes>,
     kmer_size: &usize,
@@ -193,53 +280,32 @@ pub(crate) fn create_bloom_tree(
         bloom_tree = bloom_tree.insert(&genome);
         println!("NEW GENOME added to bloom tree");
     }
-    // print final bloom tree
-    // println!("\n\n In-Order traversal of bloom tree: \n");
-    // traverse_bloom_tree(&bloom_tree.root.unwrap());
 
-    // get leaf counts
-    //get_leaf_counts(&bloom_tree.root.unwrap());
     return bloom_tree;
 }
 
-fn traverse_bloom_tree(bloom_node: &BloomNode) {
-    // traverse left children
-    match &bloom_node.left_child {
-        None => println!("{:?}-left: NULL", bloom_node.tax_id),
-        Some(child) => {
-            println!("{:?}-left: {:?}", bloom_node.tax_id, child.tax_id);
-            traverse_bloom_tree(child)
-        }
-    }
+// fn traverse_bloom_tree(bloom_node: &BloomNode) {
+//     // traverse left children
+//     match &bloom_node.left_child {
+//         None => println!("{:?}-left: NULL", bloom_node.tax_id),
+//         Some(child) => {
+//             println!("{:?}-left: {:?}", bloom_node.tax_id, child.tax_id);
+//             traverse_bloom_tree(child)
+//         }
+//     }
 
-    // print current value.
-    // println!("{:?}", bloom_node.tax_id);
+//     // print current value.
+//     // println!("{:?}", bloom_node.tax_id);
 
-    // traverse right children
-    match &bloom_node.right_child {
-        None => println!("{:?}-right: NULL", bloom_node.tax_id),
-        Some(child) => {
-            println!("{:?}-right: {:?}", bloom_node.tax_id, child.tax_id);
-            traverse_bloom_tree(child)
-        }
-    }
-}
-
-pub(crate) fn get_leaf_counts(bloom_node: &BloomNode) {
-    // traverse left children
-    match (&bloom_node.left_child, &bloom_node.right_child) {
-        (None, None) => println!(
-            "id:{:?} counts:{:?}",
-            bloom_node.tax_id, bloom_node.mapped_reads
-        ),
-        (None, Some(l_child)) => get_leaf_counts(l_child),
-        (Some(r_child), None) => get_leaf_counts(r_child),
-        (Some(r_child), Some(l_child)) => {
-            get_leaf_counts(l_child);
-            get_leaf_counts(r_child)
-        }
-    }
-}
+//     // traverse right children
+//     match &bloom_node.right_child {
+//         None => println!("{:?}-right: NULL", bloom_node.tax_id),
+//         Some(child) => {
+//             println!("{:?}-right: {:?}", bloom_node.tax_id, child.tax_id);
+//             traverse_bloom_tree(child)
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
