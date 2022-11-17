@@ -1,12 +1,9 @@
 mod bloom_filter;
-use bloom_filter::ASMS;
 mod bloom_tree;
 mod file_parser;
+mod query;
 use clap::{arg, ArgMatches, Command};
-use rayon::prelude::*;
 use std::fs::File;
-use std::io::Write;
-use std::str;
 
 fn main() {
     // get values from command line.
@@ -27,6 +24,11 @@ fn main() {
         .expect("kmer size required")
         .parse::<usize>()
         .unwrap();
+    let threshold: f32 = matches
+        .get_one::<String>("threshold")
+        .expect("threshold required")
+        .parse::<f32>()
+        .unwrap();
 
     // number of threads to run
     rayon::ThreadPoolBuilder::new()
@@ -37,19 +39,19 @@ fn main() {
     // obtain genomes from fasta/fastq files
     let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
 
-    bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
-    // // create a bloom filter
-    // let mut bloom_filter = bloom_filter::get_bloom_filter(parsed_genomes.len());
+    // build: bloom tree
+    let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
 
-    // // add genomes to the bloom filter
-    // bloom_tree::add_to_bloom(parsed_genomes, &kmer_size, &mut bloom_filter);
+    // open output file to write to
+    let mut out_file = File::create(out_file_path).unwrap();
 
-    // // open output file to write to
-    // let out_file = File::create(out_file_path).unwrap();
+    // parse reads and check for presence in the bloom tree.
+    print!("Querying reads...");
+    let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
+    bloom_node = query::query_batch(bloom_node, parsed_reads, threshold);
 
-    // // parse reads and check for presence in the bloom filter.
-    // let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
-    // check_if_in_bloom_filter(parsed_reads, &kmer_size, &mut bloom_filter, &out_file);
+    // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
+    query::save_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
 }
 
 fn parse_cmdline() -> ArgMatches {
@@ -57,7 +59,7 @@ fn parse_cmdline() -> ArgMatches {
     let matches = Command::new("PhageFilter")
         .version("2.0")
         .author("Dreycey Albin <albindreycey@gmail.com>")
-        .about("A fast, simple, and efficient way to filter reads from metagenomic data")
+        .about("A fast, simple, and efficient method for taxonomic classification.")
         .arg(
             arg!(--genomes <VALUE>)
                 .required(true)
@@ -87,7 +89,7 @@ fn parse_cmdline() -> ArgMatches {
                 .short('t')
                 .long("threads")
                 .help("Number of threads to use for read matching")
-                .default_value("4"), //.about("Number of threads to process"),
+                .default_value("4"),
         )
         .arg(
             arg!(--kmer_size <VALUE>)
@@ -95,61 +97,17 @@ fn parse_cmdline() -> ArgMatches {
                 .short('k')
                 .long("kmer_size")
                 .help("Size of the kmer to use; use with caution!")
-                .default_value("20"), //.about("Number of threads to process"),
+                .default_value("20"),
+        )
+        .arg(
+            arg!(--threshold <VALUE>)
+                .required(false)
+                .short('q')
+                .long("threshold")
+                .help("Filtering theshold (Number of kmers needed to pass)")
+                .default_value("1.0"),
         )
         .get_matches();
 
     return matches;
 }
-
-// fn check_if_in_bloom_filter(
-//     mut parsed_reads: Vec<file_parser::RecordTypes>,
-//     kmer_size: &usize,
-//     bloom_filter: &bloom_filter::BloomFilter,
-//     out_file: &File,
-// ) {
-//     // for read in parsed_reads {
-//     //     println!("READ CHECK");
-//     //     check(&read, bloom_filter, kmer_size);
-//     // }
-
-//     parsed_reads
-//         .par_iter_mut()
-//         .for_each(|read| check_sequence(&read, bloom_filter, kmer_size, out_file));
-// }
-
-// fn check_sequence(
-//     read: &file_parser::RecordTypes,
-//     bloom_filter: &bloom_filter::BloomFilter,
-//     kmer_size: &usize,
-//     mut out_file: &File,
-// ) {
-//     // map kmers
-//     let sequence: Vec<u8> = file_parser::get_sequence(read);
-//     let id: &str = file_parser::get_id(&read);
-//     let kmers = file_parser::get_kmers(&sequence, &kmer_size);
-//     let mut bit_vec: Vec<bool> = vec![];
-//     for kmer in kmers {
-//         bit_vec.push(bloom_filter.contains(&kmer));
-//     }
-
-//     // calculate the number of mapped kmers
-//     let kmers_in_bloom_filter: usize = bit_vec.iter().filter(|&n| *n == true).count();
-//     let kmer_freq: f32 = (kmers_in_bloom_filter as f32) / (bit_vec.len() as f32);
-
-//     // kmer frequency
-//     if kmer_freq > 0.01 {
-//         let s = match std::string::String::from_utf8(sequence) {
-//             Ok(v) => v,
-//             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-//         };
-//         let mut owned_string: String = ">".to_owned();
-//         owned_string.push_str(id);
-//         owned_string.push_str("\n");
-//         owned_string.push_str(&s as &str);
-//         owned_string.push_str("\n");
-//         out_file
-//             .write(owned_string.as_bytes())
-//             .expect("problem writing to file!");
-//     }
-// }
