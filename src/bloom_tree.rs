@@ -238,6 +238,19 @@ impl BloomTree<HashSeed, HashSeed> {
         }
         return current_node;
     }
+
+    fn save(&self, directory: &Path) {
+        if !directory.is_dir() {
+            panic!("Must provide a directory in which to store the tree");
+        }
+        // Create parent directories if they don't already exist
+        std::fs::create_dir_all(directory).unwrap();
+
+        let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
+
+        let json_tree = serde_json::to_string(self).unwrap();
+        tree_file.write(json_tree.as_bytes()).unwrap();
+    }
 }
 
 impl BloomNode {
@@ -296,6 +309,13 @@ pub(crate) fn create_bloom_tree(
         bloom_tree = bloom_tree.insert(&genome);
         println!("NEW GENOME added to bloom tree");
     }
+
+    let save_dir = Path::new("./tree");
+    println!(
+        "Saving bloom tree to directory {}",
+        save_dir.canonicalize().unwrap().to_str().unwrap()
+    );
+    bloom_tree.save(save_dir);
 
     return bloom_tree;
 }
