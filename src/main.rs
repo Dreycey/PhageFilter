@@ -51,7 +51,7 @@ fn main() {
     bloom_node = query::query_batch(bloom_node, parsed_reads, threshold);
 
     // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
-    query::get_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
+    query::save_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
 }
 
 fn parse_cmdline() -> ArgMatches {

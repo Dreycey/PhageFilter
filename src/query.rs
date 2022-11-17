@@ -92,7 +92,7 @@ pub(crate) fn query_batch(
 /// - `kmer_size`: The kmer size used in the bloom tree.
 ///
 /// # Returns
-/// - The BloomNode after evulating itself and all its children (used recursively).
+/// - The BloomNode after evaluating itself and all its children (used recursively).
 ///
 /// # Panics
 /// - N/A
@@ -141,8 +141,9 @@ fn _query_batch(
     return bloom_node;
 }
 
-/// Recursively traverses the bloom tree, saving
-/// lead node mappings to a specified output file.
+/// Recursively traverses the bloom tree, saving lead node mappings to a
+/// specified output file. Only saves the mapping information for leaves that
+/// were mapped to at least once.
 ///
 /// # Parameters
 /// - `bloom_node`: A leaf node of the type `BloomNode`
@@ -152,49 +153,51 @@ fn _query_batch(
 /// - ()
 ///
 /// # Panics
-/// - N/A
-pub(crate) fn get_leaf_counts(bloom_node: &BloomNode, output_file: &mut File) {
-    match (&bloom_node.left_child, &bloom_node.right_child) {
-        // leaf node
-        (None, None) => save_mappings(bloom_node, output_file),
-        // traverse right child
-        (None, Some(l_child)) => get_leaf_counts(l_child, output_file),
-        // traverse left child
-        (Some(r_child), None) => get_leaf_counts(r_child, output_file),
-        // traverse left and right child
-        (Some(r_child), Some(l_child)) => {
-            get_leaf_counts(l_child, output_file);
-            get_leaf_counts(r_child, output_file)
-        }
-    }
-}
-
-/// Saves the leaf counts to an output file.
-///
-/// # Parameters
-/// - `bloom_node`: A leaf node of the type `BloomNode`
-/// - `output_file`: A `File` object that may be written to.
-///
-/// # Returns
-/// - ()
-///
-/// # Panics
-/// - Panics if there is an error wrting to the output file.
-fn save_mappings(bloom_node: &BloomNode, output_file: &mut File) {
-    println!(
-        "{},{}\n",
-        bloom_node.tax_id.as_deref().unwrap(),
-        bloom_node.mapped_reads
-    );
-    if bloom_node.mapped_reads > 0 {
-        let tax_maps: String = format!(
-            "{},{}\n",
-            bloom_node.tax_id.as_deref().unwrap(),
-            bloom_node.mapped_reads
-        );
+/// - If `get_leaf_counts` panics (if a leaf node does not have a taxonomic ID)
+pub(crate) fn save_leaf_counts(bloom_node: &BloomNode, output_file: &mut File) {
+    let nonzero_counts = get_leaf_counts(bloom_node)
+        .into_iter()
+        .filter(|(_, count)| *count > 0);
+    for (id, count) in nonzero_counts {
+        let tax_maps: String = format!("{},{}\n", id, count);
         output_file
             .write(tax_maps.as_bytes())
             .expect("problem writing to output file!");
+    }
+}
+
+/// Recursively traverses the bloom tree, outputting the mapped reads for each
+/// genome (identified by taxonomic ID). The genome-specific data is stored at
+/// the leaves of the tree.
+///
+/// # Parameters
+/// - `bloom_node`: A leaf node of the type `BloomNode`
+///
+/// # Returns
+/// - Vector of (taxonomic ID, mapped read count) tuples
+///
+/// # Panics
+/// - If a leaf node does not have a taxonomic ID
+pub(crate) fn get_leaf_counts<'a>(bloom_node: &'a BloomNode) -> Vec<(&'a str, usize)> {
+    if bloom_node.is_leafnode() {
+        // TODO: we should use iterators instead of vectors since it will be
+        //  much more efficient. May require building a new iterator type for
+        //  our tree.
+        vec![(
+            bloom_node.tax_id.as_ref().unwrap().as_str(),
+            bloom_node.mapped_reads,
+        )]
+    } else {
+        let mut left_results = match &bloom_node.left_child {
+            Some(child) => get_leaf_counts(child),
+            None => vec![],
+        };
+        let mut right_results = match &bloom_node.right_child {
+            Some(child) => get_leaf_counts(child),
+            None => vec![],
+        };
+        left_results.append(&mut right_results);
+        left_results
     }
 }
 
@@ -228,14 +231,225 @@ mod tests {
             &root,
             &read_different,
             all_threshold,
-            kmer_size
+            kmer_size,
         ));
         assert!(query_passes(&root, &read_same, no_threshold, kmer_size));
         assert!(query_passes(
             &root,
             &read_different,
             no_threshold,
-            kmer_size
+            kmer_size,
         ));
+    }
+
+    #[test]
+    fn test_query_and_leaf_counts() {
+        let kmer_size = 5;
+        // Only 10% of reads must hit to count as a mapped read
+        let threshold = 0.1;
+
+        let records = [
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "baseline",
+                None,
+                "ATCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_first",
+                None,
+                "CTCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_mid",
+                None,
+                "ATTAG".as_ref(),
+            )),
+        ];
+
+        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+
+        let read = [RecordTypes::FastaRecord(fasta::Record::with_attrs(
+            "baseline",
+            None,
+            "ATCAG".as_ref(),
+        ))]
+        .into_iter()
+        .collect();
+        tree = query_batch(tree, read, threshold);
+
+        let mut expected_counts = [
+            ("baseline", 1),
+            ("diff", 0),
+            ("onediff_first", 0),
+            ("onediff_mid", 0),
+        ];
+
+        assert_eq!(
+            get_leaf_counts(&tree.root.unwrap()).sort(),
+            expected_counts.sort()
+        );
+    }
+
+    #[test]
+    fn test_query_and_leaf_counts_smaller_kmer_size() {
+        let kmer_size = 4;
+        // Only 10% of reads must hit to count as a mapped read
+        let threshold = 0.1;
+
+        let records = [
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "baseline",
+                None,
+                "ATCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_first",
+                None,
+                "CTCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_mid",
+                None,
+                "ATTAG".as_ref(),
+            )),
+        ];
+
+        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+
+        let read = [RecordTypes::FastaRecord(fasta::Record::with_attrs(
+            "baseline",
+            None,
+            "TCAG".as_ref(),
+        ))]
+        .into_iter()
+        .collect();
+        tree = query_batch(tree, read, threshold);
+
+        let mut expected_counts = [
+            ("baseline", 1),
+            ("diff", 0),
+            ("onediff_first", 1),
+            ("onediff_mid", 0),
+        ];
+
+        assert_eq!(
+            get_leaf_counts(&tree.root.unwrap()).sort(),
+            expected_counts.sort()
+        );
+    }
+
+    #[test]
+    fn test_query_and_leaf_counts_multiple_reads() {
+        let kmer_size = 4;
+        // now 51% of reads must hit to count as a mapped read
+        let threshold = 0.51;
+
+        let records = [
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "baseline",
+                None,
+                "ATCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_first",
+                None,
+                "CTCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_mid",
+                None,
+                "ATTAG".as_ref(),
+            )),
+        ];
+
+        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+
+        let read_set = [
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("baseline", None, "TCAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("baseline", None, "ATCA".as_ref())),
+        ]
+        .into_iter()
+        .collect();
+        tree = query_batch(tree, read_set, threshold);
+
+        // Even though there are multiple reads, since we only query once, the max number of hits
+        // is 1. Since we set the threshold above 50%, the genome that only one read maps to is not
+        // counted as hit.
+        let mut expected_counts = [
+            ("baseline", 1),
+            ("diff", 0),
+            ("onediff_first", 0),
+            ("onediff_mid", 0),
+        ];
+
+        assert_eq!(
+            get_leaf_counts(&tree.root.unwrap()).sort(),
+            expected_counts.sort()
+        );
+    }
+
+    #[test]
+    fn test_query_and_leaf_counts_multiple_queries() {
+        let kmer_size = 4;
+        // Only 10% of reads must hit to count as a mapped read
+        let threshold = 0.1;
+
+        let records = [
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "baseline",
+                None,
+                "ATCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_first",
+                None,
+                "CTCAG".as_ref(),
+            )),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "onediff_mid",
+                None,
+                "ATTAG".as_ref(),
+            )),
+        ];
+
+        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+
+        let all_read_sets = [
+            [RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "baseline",
+                None,
+                "TCAG".as_ref(),
+            ))]
+            .into_iter()
+            .collect(),
+            [RecordTypes::FastaRecord(fasta::Record::with_attrs(
+                "baseline",
+                None,
+                "ATCA".as_ref(),
+            ))]
+            .into_iter()
+            .collect(),
+        ];
+
+        for read_set in all_read_sets {
+            tree = query_batch(tree, read_set, threshold);
+        }
+
+        // The first read set should map to both baseline and onediff_first, the second should only map to baseline.
+        let mut expected_counts = [
+            ("baseline", 2),
+            ("diff", 0),
+            ("onediff_first", 1),
+            ("onediff_mid", 0),
+        ];
+
+        assert_eq!(
+            get_leaf_counts(&tree.root.unwrap()).sort(),
+            expected_counts.sort()
+        );
     }
 }

@@ -104,7 +104,7 @@ impl DistanceChecker for BloomFilter<RandomState, RandomState> {
     fn distance(&self, other: &BloomFilter) -> usize {
         let mut diff_1: BitVec = self.bits.clone();
         diff_1.xor(&other.bits);
-        // Counts the number of bits that differ between the two bitvecs.
+        // The Hamming Distance is the number of bits that differ between the two bitvecs.
         let hamming_distance: usize = diff_1.iter().filter(|x| *x).count();
         return hamming_distance;
     }
