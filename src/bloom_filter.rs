@@ -42,12 +42,14 @@
 /// ```
 use bit_vec::BitVec;
 mod hash_iter;
+pub mod hasher;
+use hasher::HashSeed;
+use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
-use std::collections::hash_map::RandomState;
 use std::fmt::{Debug, Formatter};
 use std::hash::{BuildHasher, Hash};
 
-pub fn get_bloom_filter(hash_states: (RandomState, RandomState)) -> BloomFilter {
+pub fn get_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
     let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
     let expected_num_items: u32 = max_genome_size;
     println!("number of items expected: {}\n", expected_num_items);
@@ -69,8 +71,8 @@ pub trait DistanceChecker {
     fn distance(&self, other: &Self) -> usize;
 }
 
-#[derive(Clone)]
-pub struct BloomFilter<R = RandomState, S = RandomState> {
+#[derive(Clone, Deserialize, Serialize)]
+pub struct BloomFilter<R = HashSeed, S = HashSeed> {
     bits: BitVec,
     num_hashes: u32,
     hash_builder_one: R,
@@ -78,13 +80,13 @@ pub struct BloomFilter<R = RandomState, S = RandomState> {
 }
 
 /// Equality for bloom filters is judged only using the bits field
-impl PartialEq for BloomFilter<RandomState, RandomState> {
+impl PartialEq for BloomFilter<HashSeed, HashSeed> {
     fn eq(&self, other: &Self) -> bool {
         self.bits == other.bits
     }
 }
 
-impl Debug for BloomFilter<RandomState, RandomState> {
+impl Debug for BloomFilter<HashSeed, HashSeed> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BloomFilter")
             // TODO: Omitted bits representation for brevity because the number of bits in the
@@ -98,7 +100,7 @@ impl Debug for BloomFilter<RandomState, RandomState> {
     }
 }
 
-impl DistanceChecker for BloomFilter<RandomState, RandomState> {
+impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
     /// Calculates the distance between two
     /// bloom filters using the hamming_distance.
     fn distance(&self, other: &BloomFilter) -> usize {
@@ -110,14 +112,14 @@ impl DistanceChecker for BloomFilter<RandomState, RandomState> {
     }
 }
 
-impl BloomFilter<RandomState, RandomState> {
+impl BloomFilter<HashSeed, HashSeed> {
     /// Create a new BloomFilter with the specified number of bits,
     /// and hashes
     pub fn with_size(
         num_bits: usize,
         num_hashes: u32,
-        hash_states: (RandomState, RandomState),
-    ) -> BloomFilter<RandomState, RandomState> {
+        hash_states: (HashSeed, HashSeed),
+    ) -> BloomFilter<HashSeed, HashSeed> {
         let (hash_builder_one, hash_builder_two) = hash_states;
         BloomFilter {
             bits: BitVec::from_elem(num_bits, false),
@@ -133,8 +135,8 @@ impl BloomFilter<RandomState, RandomState> {
     pub fn with_rate(
         rate: f32,
         expected_num_items: u32,
-        hash_states: (RandomState, RandomState),
-    ) -> BloomFilter<RandomState, RandomState> {
+        hash_states: (HashSeed, HashSeed),
+    ) -> BloomFilter<HashSeed, HashSeed> {
         let bits = needed_bits(rate, expected_num_items);
         BloomFilter::with_size(
             bits,
@@ -269,7 +271,7 @@ mod tests {
 
     // Build a static bloom filter for testing. Not meant to be inserted into.
     fn get_static_bloom_filter(bits: BitVec) -> BloomFilter {
-        let state = RandomState::new();
+        let state = HashSeed::new();
 
         BloomFilter {
             bits,

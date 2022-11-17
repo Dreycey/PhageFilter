@@ -1,3 +1,4 @@
+use crate::bloom_filter::hasher::HashSeed;
 /// Methods and definitions for a BloomTree and BloomNodes
 /// within the BloomTree. These methods allow for creating
 /// a bloom tree for a set of given genomes.
@@ -11,10 +12,15 @@
 use crate::bloom_filter::{get_bloom_filter, BloomFilter, DistanceChecker, ASMS};
 use crate::file_parser;
 use rand::Rng;
-use std::collections::hash_map::RandomState;
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
-#[derive(Debug)]
-pub(crate) struct BloomTree<R = RandomState, S = RandomState> {
+const TREE_FILENAME: &'static str = "tree.json";
+
+#[derive(Debug, Deserialize, Serialize)]
+pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
     pub(crate) root: Option<Box<BloomNode>>,
 
     // Size of kmers in the bloom filters
@@ -24,7 +30,7 @@ pub(crate) struct BloomTree<R = RandomState, S = RandomState> {
     pub(crate) hash_states: (R, S),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct BloomNode {
     pub(crate) left_child: Option<Box<BloomNode>>,
     pub(crate) right_child: Option<Box<BloomNode>>,
@@ -38,7 +44,7 @@ pub(crate) struct BloomNode {
 }
 
 /// RandomState doesn't support equality comparisons so we ignore the hash_states when comparing BloomTrees.
-impl PartialEq for BloomTree<RandomState, RandomState> {
+impl PartialEq for BloomTree<HashSeed, HashSeed> {
     /// Check if 2 BloomTrees are equal
     ///
     /// # Returns
@@ -62,7 +68,7 @@ impl PartialEq for BloomNode {
     }
 }
 
-impl BloomTree<RandomState, RandomState> {
+impl BloomTree<HashSeed, HashSeed> {
     /// Construct a new BloomTree
     ///
     /// # Parameters
@@ -75,7 +81,7 @@ impl BloomTree<RandomState, RandomState> {
             root: None,
             kmer_size,
             // initializes random hash state to use for the whole tree
-            hash_states: (RandomState::new(), RandomState::new()),
+            hash_states: (HashSeed::new(), HashSeed::new()),
         }
     }
 
@@ -134,14 +140,14 @@ impl BloomTree<RandomState, RandomState> {
     /// # Parameters
     /// - `current_node`: BloomNode representating a leaf node already in the tree.
     /// - `new_node`: The BloomNode being added to the tree.
-    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
     ///
     /// # Returns
     /// - The new internal node, with children being the given leaf nodes.
     fn init_internal_node(
         current_node: Box<BloomNode>,
         new_node: Box<BloomNode>,
-        hash_states: &(RandomState, RandomState),
+        hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
         // get random number for internal node
         let mut rng = rand::thread_rng();
@@ -177,14 +183,14 @@ impl BloomTree<RandomState, RandomState> {
     /// # Parameters
     /// - `current_node`: The current BloomNode being evaluated (used recursively).
     /// - `node`: The BloomNode being added to the tree.
-    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
     ///
     /// # Returns
     /// - The current node after modification to self or children.
     fn add_to_tree(
         mut current_node: Box<BloomNode>,
         node: Box<BloomNode>,
-        hash_states: &(RandomState, RandomState),
+        hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
         // TODO: delete debug:
         println!("Looking at current node: {:?}", current_node.tax_id);
@@ -238,12 +244,12 @@ impl BloomNode {
     /// Returns an instance of a BloomNode.
     ///
     /// # Parameters
-    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
     /// - `tax_id`: The taxonimic identifier for the genome, or the NCBI accession.
     ///
     /// # Returns
     /// - a bool of whether the node is a leaf node.
-    fn new(hash_states: (RandomState, RandomState), tax_id: Option<String>) -> Self {
+    fn new(hash_states: (HashSeed, HashSeed), tax_id: Option<String>) -> Self {
         BloomNode {
             // initializes random hash state to use for the whole tree
             left_child: None,
