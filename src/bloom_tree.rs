@@ -240,6 +240,16 @@ impl BloomTree<HashSeed, HashSeed> {
         return current_node;
     }
 
+    /// This method saves the tree to disk using a given directory name.
+    ///
+    /// # Parameters
+    /// - `directory`: Directory name where the serialized tree will be stored.
+    ///
+    /// # Returns
+    /// - N/A
+    ///
+    /// # Panics
+    /// - if the directory does not exist.
     fn save(&self, directory: &Path) {
         // Create parent directories if they don't already exist
         std::fs::create_dir_all(directory).unwrap();
@@ -257,24 +267,6 @@ impl BloomTree<HashSeed, HashSeed> {
         let json_tree = serde_json::to_string(self).unwrap();
         tree_file.write(json_tree.as_bytes()).unwrap();
     }
-
-    // fn load(directory: &Path) {
-    //     if !directory.is_dir() {
-    //         panic!("Must provide a directory in which to store the tree");
-    //     }
-    //     // Create parent directories if they don't already exist
-    //     std::fs::create_dir_all(directory).unwrap();
-    //     // print where the tree is being saved.
-    //     println!(
-    //         "Saving bloom tree to directory {}",
-    //         save_dir.canonicalize().unwrap().to_str().unwrap()
-    //     );
-    //     // serialize the tree.
-    //     let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
-
-    //     let json_tree = serde_json::to_string(self).unwrap();
-    //     tree_file.write(json_tree.as_bytes()).unwrap();
-    // }
 }
 
 impl BloomNode {
