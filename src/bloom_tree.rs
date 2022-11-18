@@ -250,7 +250,7 @@ impl BloomTree<HashSeed, HashSeed> {
     ///
     /// # Panics
     /// - if the directory does not exist.
-    fn save(&self, directory: &Path) {
+    pub fn save(&self, directory: &Path) {
         // Create parent directories if they don't already exist
         std::fs::create_dir_all(directory).unwrap();
         // panics if it doesn't exist
@@ -353,9 +353,6 @@ pub(crate) fn create_bloom_tree(
         bloom_tree = bloom_tree.insert(&genome);
         println!("NEW GENOME added to bloom tree");
     }
-    // save tree to disk
-    let save_dir = Path::new("./tree/");
-    bloom_tree.save(save_dir);
 
     return bloom_tree;
 }
