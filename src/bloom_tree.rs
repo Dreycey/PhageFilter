@@ -267,6 +267,34 @@ impl BloomTree<HashSeed, HashSeed> {
         let json_tree = serde_json::to_string(self).unwrap();
         tree_file.write(json_tree.as_bytes()).unwrap();
     }
+
+    /// This method loads a serialized tree from disk into memory.
+    ///
+    /// # Parameters
+    /// - `directory`: Directory name where the serialized tree is located.
+    ///
+    /// # Returns
+    /// - N/A
+    ///
+    /// # Panics
+    /// - if the directory does not exist.
+    pub fn load(directory: &Path) -> BloomTree {
+        // panics if it doesn't exist
+        if !directory.is_dir() {
+            panic!("Must provide a directory in where a tree has been stored");
+        }
+        // print where the tree is being saved.
+        println!(
+            "Reading bloom tree from directory {}",
+            directory.canonicalize().unwrap().to_str().unwrap()
+        );
+        // serialized bloom tree path
+        let tree_file: File = File::open(directory.join(TREE_FILENAME)).unwrap();
+        // serialize the tree
+        let json_tree: BloomTree = serde_json::from_reader(tree_file).unwrap();
+
+        return json_tree;
+    }
 }
 
 impl BloomNode {
@@ -328,6 +356,7 @@ pub(crate) fn create_bloom_tree(
     // save tree to disk
     let save_dir = Path::new("./tree/");
     bloom_tree.save(save_dir);
+
     return bloom_tree;
 }
 

@@ -4,6 +4,7 @@ mod file_parser;
 mod query;
 use clap::{arg, ArgMatches, Command};
 use std::fs::File;
+use std::path::Path;
 
 fn main() {
     // get values from command line.
@@ -41,7 +42,8 @@ fn main() {
 
     // build: bloom tree
     let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
-
+    //let save_dir = Path::new("./tree/");
+    //let mut bloom_node: bloom_tree::BloomTree = bloom_tree::BloomTree::load(save_dir);
     // open output file to write to
     let mut out_file = File::create(out_file_path).unwrap();
 
