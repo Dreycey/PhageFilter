@@ -19,7 +19,7 @@ pub enum RecordTypes {
 }
 
 /// Returns the lexographically smallest kmer between a
-/// given kmer and it's reverse compliment.
+/// given kmer and its reverse compliment.
 ///
 /// # Parameters
 /// - `kmer`: The given kmer in u8
@@ -56,8 +56,6 @@ pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
     if kmer_size > sequence.len() || kmer_size <= 0 {
         // Can't get kmers of a size longer than the sequence
         // Can't get kmers of size 0
-        //panic!("The kmer size is greater than the query or input genome!");
-        //println!("{:?}", sequence);
         return vec![];
     }
 

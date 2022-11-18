@@ -177,8 +177,8 @@ impl BloomTree<HashSeed, HashSeed> {
     /// This method traverses a BloomTree, adding a BloomNode where best fit
     /// in a greedy manner. This works by checking if the current node has children.
     /// If it has 2 children, then it will choose which one to check next based on the
-    /// minimum hamming distance. If it as 1 child, it add the new node to the current node.
-    /// If it's a leaf, then it create a new interal node, with the children being the new node
+    /// minimum hamming distance. If it has 1 child, it add the new node to the current node.
+    /// If it's a leaf, then it create a new internal node, with the children being the new node
     /// and the current node.
     ///
     /// # Parameters
@@ -356,29 +356,6 @@ pub(crate) fn create_bloom_tree(
 
     return bloom_tree;
 }
-
-// fn traverse_bloom_tree(bloom_node: &BloomNode) {
-//     // traverse left children
-//     match &bloom_node.left_child {
-//         None => println!("{:?}-left: NULL", bloom_node.tax_id),
-//         Some(child) => {
-//             println!("{:?}-left: {:?}", bloom_node.tax_id, child.tax_id);
-//             traverse_bloom_tree(child)
-//         }
-//     }
-
-//     // print current value.
-//     // println!("{:?}", bloom_node.tax_id);
-
-//     // traverse right children
-//     match &bloom_node.right_child {
-//         None => println!("{:?}-right: NULL", bloom_node.tax_id),
-//         Some(child) => {
-//             println!("{:?}-right: {:?}", bloom_node.tax_id, child.tax_id);
-//             traverse_bloom_tree(child)
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
