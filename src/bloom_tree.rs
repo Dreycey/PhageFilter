@@ -13,6 +13,7 @@ use crate::bloom_filter::{get_bloom_filter, BloomFilter, DistanceChecker, ASMS};
 use crate::file_parser;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -240,17 +241,40 @@ impl BloomTree<HashSeed, HashSeed> {
     }
 
     fn save(&self, directory: &Path) {
+        // Create parent directories if they don't already exist
+        std::fs::create_dir_all(directory).unwrap();
+        // panics if it doesn't exist
         if !directory.is_dir() {
             panic!("Must provide a directory in which to store the tree");
         }
-        // Create parent directories if they don't already exist
-        std::fs::create_dir_all(directory).unwrap();
-
+        // print where the tree is being saved.
+        println!(
+            "Saving bloom tree to directory {}",
+            directory.canonicalize().unwrap().to_str().unwrap()
+        );
+        // serialize the tree
         let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
-
         let json_tree = serde_json::to_string(self).unwrap();
         tree_file.write(json_tree.as_bytes()).unwrap();
     }
+
+    // fn load(directory: &Path) {
+    //     if !directory.is_dir() {
+    //         panic!("Must provide a directory in which to store the tree");
+    //     }
+    //     // Create parent directories if they don't already exist
+    //     std::fs::create_dir_all(directory).unwrap();
+    //     // print where the tree is being saved.
+    //     println!(
+    //         "Saving bloom tree to directory {}",
+    //         save_dir.canonicalize().unwrap().to_str().unwrap()
+    //     );
+    //     // serialize the tree.
+    //     let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
+
+    //     let json_tree = serde_json::to_string(self).unwrap();
+    //     tree_file.write(json_tree.as_bytes()).unwrap();
+    // }
 }
 
 impl BloomNode {
@@ -309,14 +333,9 @@ pub(crate) fn create_bloom_tree(
         bloom_tree = bloom_tree.insert(&genome);
         println!("NEW GENOME added to bloom tree");
     }
-
-    let save_dir = Path::new("./tree");
-    println!(
-        "Saving bloom tree to directory {}",
-        save_dir.canonicalize().unwrap().to_str().unwrap()
-    );
+    // save tree to disk
+    let save_dir = Path::new("./tree/");
     bloom_tree.save(save_dir);
-
     return bloom_tree;
 }
 
