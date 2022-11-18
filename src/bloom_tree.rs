@@ -13,7 +13,6 @@ use crate::bloom_filter::{get_bloom_filter, BloomFilter, DistanceChecker, ASMS};
 use crate::file_parser;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -552,5 +551,39 @@ mod tests {
             "Test failed for {:#?} and {:#?}",
             tree, expected_tree
         );
+    }
+
+    #[test]
+    fn test_save_load() {
+        let kmer_size = 4;
+        let rand_suffix: usize = rand::random();
+        // We add a random suffix to prevent parallel tests from conflicting with each other.
+        let scratch_dir_name = format!("test_tmp_{}/", rand_suffix);
+        let scratch_dir = Path::new(&scratch_dir_name);
+        let records1 = vec![
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "TTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "TTTAG".as_ref())),
+        ];
+
+        let records2 = vec![
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "GATCAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "GTTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "GTTTAG".as_ref())),
+        ];
+
+        let tree1 = create_bloom_tree(records1, &kmer_size);
+
+        // Should be able to save and load the same tree
+        tree1.save(scratch_dir);
+        assert_eq!(BloomTree::load(scratch_dir), tree1);
+
+        // Saving overwrites existing saved tree
+        let tree2 = create_bloom_tree(records2, &kmer_size);
+        tree2.save(scratch_dir);
+        assert_eq!(BloomTree::load(scratch_dir), tree2);
+
+        // Cleanup scratch dir
+        std::fs::remove_dir_all(scratch_dir).unwrap();
     }
 }

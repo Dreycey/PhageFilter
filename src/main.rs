@@ -27,7 +27,7 @@ enum Commands {
         /// Path to store the tree to disk.
         #[arg(required = true, short, long)]
         db_path: String,
-        /// Number of threads to use for read matching
+        /// Number of threads to use to build the bloom tree
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
         /// Size of the kmer to use; use with caution!
