@@ -9,7 +9,7 @@ edition = "2021"
 bio = "*"
 bit-vec = { version = "0.6", features = ["serde"] }
 rayon = "1.5.3"
-clap = "*"
+clap = { version = "4.0.26", features = ["derive"] }
 rand = "*"
 rustc-hash = "1.1.0"
 serde = "1.0.147"
