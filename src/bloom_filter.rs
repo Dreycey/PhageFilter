@@ -47,7 +47,9 @@ use hasher::HashSeed;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::fmt::{Debug, Formatter};
+use std::fs::File;
 use std::hash::{BuildHasher, Hash};
+use std::io::Write;
 
 pub fn get_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
     let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
@@ -143,6 +145,20 @@ impl BloomFilter<HashSeed, HashSeed> {
             optimal_num_hashes(bits, expected_num_items),
             hash_states,
         )
+    }
+
+    /// returns a bloom filter that was saved to disk
+    pub fn load(bloom_path: &String) -> BloomFilter {
+        let bloomfilter_file: File = File::open(bloom_path).unwrap();
+        let bloomfilter: BloomFilter = serde_json::from_reader(bloomfilter_file).unwrap();
+        return bloomfilter;
+    }
+
+    /// Saves a bloom filter to disk
+    pub fn save(&self, bloomfilter_file: &String) {
+        let mut bloomfilter_file = File::create(bloomfilter_file).unwrap();
+        let serialized_bf = serde_json::to_string(self).unwrap();
+        bloomfilter_file.write(serialized_bf.as_bytes()).unwrap();
     }
 
     /// Get the number of bits this BloomFilter is using

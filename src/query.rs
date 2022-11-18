@@ -12,7 +12,7 @@
 /// bloom_node = query::query_batch(bloom_node, parsed_reads, threshold);
 /// query::get_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
 /// ```
-use crate::bloom_filter::ASMS;
+use crate::bloom_filter::{BloomFilter, ASMS};
 use crate::bloom_tree::{BloomNode, BloomTree};
 use crate::file_parser;
 use rayon::prelude::*;
@@ -35,16 +35,17 @@ use std::io::Write;
 /// # Panics
 /// - N/A
 fn query_passes(
-    bloom_node: &Box<BloomNode>,
+    nodes_bloomfilter: &BloomFilter,
     read: &file_parser::RecordTypes,
     threshold: f32,
     kmer_size: usize,
 ) -> bool {
     let sequence: Vec<u8> = file_parser::get_sequence(read);
     let kmers: Vec<Vec<u8>> = file_parser::get_kmers(&sequence, &kmer_size);
+    // check number of matches
     let num_matches = kmers
         .iter()
-        .filter(|kmer| bloom_node.bloom_filter.contains(kmer))
+        .filter(|kmer| nodes_bloomfilter.contains(kmer))
         .count();
     return num_matches >= (threshold * kmers.len() as f32).ceil() as usize;
 }
@@ -102,10 +103,12 @@ fn _query_batch(
     threshold: f32,
     kmer_size: usize,
 ) -> Box<BloomNode> {
+    // load bloom filter from disk
+    let nodes_bloomfilter = bloom_node.get_bloom_filter();
     // check which reads pass the bloom filter check; in parallel
     let pass = read_set
         .par_iter()
-        .filter(|read| query_passes(&bloom_node, read, threshold, kmer_size));
+        .filter(|read| query_passes(&nodes_bloomfilter, read, threshold, kmer_size));
 
     // process the node differently, if intenal or leaf
     if !bloom_node.is_leafnode() {
@@ -223,19 +226,32 @@ mod tests {
         let read_different =
             RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "AAAA".as_ref()));
 
-        let tree = bloom_tree::create_bloom_tree(vec![genome], &kmer_size);
+        let tree =
+            bloom_tree::create_bloom_tree(vec![genome], &kmer_size, &"fakedb_path/".to_string());
         let root = tree.root.unwrap();
 
-        assert!(query_passes(&root, &read_same, all_threshold, kmer_size));
+        // get root nodes bloom filter.
+        let root_nodes_bloom_filter = &root.get_bloom_filter();
+        assert!(query_passes(
+            &root_nodes_bloom_filter,
+            &read_same,
+            all_threshold,
+            kmer_size
+        ));
         assert!(!query_passes(
-            &root,
+            &root_nodes_bloom_filter,
             &read_different,
             all_threshold,
             kmer_size,
         ));
-        assert!(query_passes(&root, &read_same, no_threshold, kmer_size));
         assert!(query_passes(
-            &root,
+            &root_nodes_bloom_filter,
+            &read_same,
+            no_threshold,
+            kmer_size
+        ));
+        assert!(query_passes(
+            &root_nodes_bloom_filter,
             &read_different,
             no_threshold,
             kmer_size,
@@ -267,7 +283,11 @@ mod tests {
             )),
         ];
 
-        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let mut tree = bloom_tree::create_bloom_tree(
+            records.into_iter().collect(),
+            &kmer_size,
+            &"fakedb_path/".to_string(),
+        );
 
         let read = [RecordTypes::FastaRecord(fasta::Record::with_attrs(
             "baseline",
@@ -316,7 +336,11 @@ mod tests {
             )),
         ];
 
-        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let mut tree = bloom_tree::create_bloom_tree(
+            records.into_iter().collect(),
+            &kmer_size,
+            &"fakedb_path/".to_string(),
+        );
 
         let read = [RecordTypes::FastaRecord(fasta::Record::with_attrs(
             "baseline",
@@ -365,7 +389,11 @@ mod tests {
             )),
         ];
 
-        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let mut tree = bloom_tree::create_bloom_tree(
+            records.into_iter().collect(),
+            &kmer_size,
+            &"fakedb_path/".to_string(),
+        );
 
         let read_set = [
             RecordTypes::FastaRecord(fasta::Record::with_attrs("baseline", None, "TCAG".as_ref())),
@@ -416,7 +444,11 @@ mod tests {
             )),
         ];
 
-        let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let mut tree = bloom_tree::create_bloom_tree(
+            records.into_iter().collect(),
+            &kmer_size,
+            &"fakedb_path/".to_string(),
+        );
 
         let all_read_sets = [
             [RecordTypes::FastaRecord(fasta::Record::with_attrs(
