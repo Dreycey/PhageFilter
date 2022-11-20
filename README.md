@@ -25,8 +25,14 @@ Options:
 
 ## Examples
 
-- Using on simulated reads with 7 threads.
+1. Build the sequence bloom tree
 
 ```bash
-cargo run -- -g examples/genomes/viral_genome_dir/ -r examples/test_reads/simulated_reads.fa -t 6 --out genomes_in_file.txt -k 20 -q 1
+cargo run -- build --genomes examples/genomes/viral_genome_dir/ --db-path tree -t 6
+```
+
+2. Query examples
+
+```bash
+cargo run -- query -r examples/test_reads/simulated_reads.fa -o genomes_in_file.csv -d tree -c 1.0 -t 6
 ```

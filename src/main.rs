@@ -2,112 +2,119 @@ mod bloom_filter;
 mod bloom_tree;
 mod file_parser;
 mod query;
-use clap::{arg, ArgMatches, Command};
+use clap::{arg, Parser, Subcommand};
 use std::fs::File;
+use std::path::Path;
 
-fn main() {
-    // get values from command line.
-    let matches: ArgMatches = parse_cmdline();
-
-    let seq_file_path: &String = matches
-        .get_one::<String>("genomes")
-        .expect("Genomes required");
-    let read_file_path: &String = matches.get_one::<String>("reads").expect("Reads required");
-    let out_file_path: &String = matches.get_one::<String>("out").expect("Output required");
-    let thread_count: usize = matches
-        .get_one::<String>("thread_count")
-        .expect("Threads required")
-        .parse::<usize>()
-        .unwrap();
-    let kmer_size: usize = matches
-        .get_one::<String>("kmer_size")
-        .expect("kmer size required")
-        .parse::<usize>()
-        .unwrap();
-    let threshold: f32 = matches
-        .get_one::<String>("threshold")
-        .expect("threshold required")
-        .parse::<f32>()
-        .unwrap();
-
-    // number of threads to run
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(thread_count)
-        .build_global()
-        .unwrap();
-
-    // obtain genomes from fasta/fastq files
-    let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
-
-    // build: bloom tree
-    let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
-
-    // open output file to write to
-    let mut out_file = File::create(out_file_path).unwrap();
-
-    // parse reads and check for presence in the bloom tree.
-    print!("Querying reads...");
-    let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&read_file_path);
-    bloom_node = query::query_batch(bloom_node, parsed_reads, threshold);
-
-    // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
-    query::save_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
+#[derive(Parser)]
+#[command(name = "MyApp")]
+#[command(author = "Dreycey Albin & Kirby Linvill")]
+#[command(version = "2.0")]
+#[command(about = "A fast, simple and efficient metagenomic classification tool.", long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
 }
 
-fn parse_cmdline() -> ArgMatches {
-    // parse the command line arguments
-    let matches = Command::new("PhageFilter")
-        .version("2.0")
-        .author("Dreycey Albin <albindreycey@gmail.com>")
-        .about("A fast, simple, and efficient method for taxonomic classification.")
-        .arg(
-            arg!(--genomes <VALUE>)
-                .required(true)
-                .short('g')
-                .long("genomes")
-                .help("Path to genomes file or directory. (Fasta)"),
-        )
-        .arg(
-            arg!(--reads <VALUE>)
-                .required(true)
-                .short('r')
-                .long("reads")
-                .help(
-                    "Path to read file or directory of reads. (Fasta or Fastq, or dirs with both)",
-                ),
-        )
-        .arg(
-            arg!(--out <VALUE>)
-                .required(true)
-                .short('o')
-                .long("out")
-                .help("Path to output file. (Fasta)"),
-        )
-        .arg(
-            arg!(--thread_count <VALUE>)
-                .required(false)
-                .short('t')
-                .long("threads")
-                .help("Number of threads to use for read matching")
-                .default_value("4"),
-        )
-        .arg(
-            arg!(--kmer_size <VALUE>)
-                .required(false)
-                .short('k')
-                .long("kmer_size")
-                .help("Size of the kmer to use; use with caution!")
-                .default_value("20"),
-        )
-        .arg(
-            arg!(--threshold <VALUE>)
-                .required(false)
-                .short('q')
-                .long("threshold")
-                .help("Filtering theshold (Number of kmers needed to pass)")
-                .default_value("1.0"),
-        )
-        .get_matches();
+#[derive(Subcommand)]
+enum Commands {
+    /// Builds the BloomTree
+    Build {
+        /// Path to genomes file or directory. (Fasta)
+        #[arg(required = true, short, long)]
+        genomes: String,
+        /// Path to store the tree to disk.
+        #[arg(required = true, short, long)]
+        db_path: String,
+        /// Number of threads to use to build the bloom tree
+        #[arg(required = false, default_value_t = 4, short, long)]
+        threads: usize,
+        /// Size of the kmer to use; use with caution!
+        #[arg(required = false, default_value_t = 20, short, long)]
+        kmer_size: usize,
+    },
+    /// Queries a set of reads (ran after building the bloom tree)
+    Query {
+        /// Path to read file or directory of reads. (Fasta or Fastq, or dirs with both)
+        #[arg(required = true, short, long)]
+        reads: String,
+        /// Path to output file. (CSV)
+        #[arg(required = true, short, long)]
+        out: String,
+        /// Path to store the tree to disk.
+        #[arg(required = true, short, long)]
+        db_path: String,
+        /// Number of threads to use for read matching
+        #[arg(required = false, default_value_t = 4, short, long)]
+        threads: usize,
+        /// Filtering theshold (Fraction of kmers needed to pass)
+        #[arg(required = false, default_value_t = 1.0, short, long)]
+        cuttoff_threshold: f32,
+    },
+}
 
-    return matches;
+fn main() {
+    let cli = Cli::parse();
+
+    // You can check for the existence of subcommands, and if found use their
+    // matches just as you would the top level cmd
+    match &cli.command {
+        Commands::Build {
+            genomes,
+            db_path,
+            threads,
+            kmer_size,
+        } => {
+            // initial message to show used parameters.
+            println!(
+                "\n Build input-  \n\tdb:{} \n\tthreads:{} \n\tkmersize:{} \n",
+                db_path, threads, kmer_size
+            );
+            // number of threads to run
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(*threads)
+                .build_global()
+                .unwrap();
+            // obtain genomes from fasta/fastq files
+            let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&genomes);
+            print!("Building the SBT... \n");
+            // build: bloom tree
+            let bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, kmer_size);
+            // save tree to disk
+            let save_dir = Path::new(db_path);
+            bloom_node.save(save_dir);
+            print!("Finished. \n");
+        }
+        Commands::Query {
+            reads,
+            out,
+            db_path,
+            threads,
+            cuttoff_threshold,
+        } => {
+            // initial message to show used parameters.
+            println!(
+                "\n Query input- \n\treads:{} \n\tthreads:{}, \n\tout:{}, \n\tdb_path:{}, \n\tthreads:{} \n\tcuttoff_threshold:{} \n",
+                reads, threads, out, db_path, threads, cuttoff_threshold
+            );
+            // number of threads to run
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(*threads)
+                .build_global()
+                .unwrap();
+            // load bloom tree from disk
+            let full_db_path: &Path = Path::new(db_path);
+            let mut bloom_node: bloom_tree::BloomTree = bloom_tree::BloomTree::load(full_db_path);
+            // parse reads and check for presence in the bloom tree.
+            print!("Querying reads... \n");
+            let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&reads);
+            bloom_node = query::query_batch(bloom_node, parsed_reads, *cuttoff_threshold);
+            // open output file to write to
+            let mut out_file = File::create(out).unwrap();
+            // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
+            query::save_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
+            print!("Finished. \n");
+        }
+    }
 }

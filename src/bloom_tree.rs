@@ -1,3 +1,4 @@
+use crate::bloom_filter::hasher::HashSeed;
 /// Methods and definitions for a BloomTree and BloomNodes
 /// within the BloomTree. These methods allow for creating
 /// a bloom tree for a set of given genomes.
@@ -11,10 +12,15 @@
 use crate::bloom_filter::{get_bloom_filter, BloomFilter, DistanceChecker, ASMS};
 use crate::file_parser;
 use rand::Rng;
-use std::collections::hash_map::RandomState;
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
-#[derive(Debug)]
-pub(crate) struct BloomTree<R = RandomState, S = RandomState> {
+const TREE_FILENAME: &'static str = "tree.json";
+
+#[derive(Debug, Deserialize, Serialize)]
+pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
     pub(crate) root: Option<Box<BloomNode>>,
 
     // Size of kmers in the bloom filters
@@ -24,7 +30,7 @@ pub(crate) struct BloomTree<R = RandomState, S = RandomState> {
     pub(crate) hash_states: (R, S),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct BloomNode {
     pub(crate) left_child: Option<Box<BloomNode>>,
     pub(crate) right_child: Option<Box<BloomNode>>,
@@ -38,7 +44,7 @@ pub(crate) struct BloomNode {
 }
 
 /// RandomState doesn't support equality comparisons so we ignore the hash_states when comparing BloomTrees.
-impl PartialEq for BloomTree<RandomState, RandomState> {
+impl PartialEq for BloomTree<HashSeed, HashSeed> {
     /// Check if 2 BloomTrees are equal
     ///
     /// # Returns
@@ -62,7 +68,7 @@ impl PartialEq for BloomNode {
     }
 }
 
-impl BloomTree<RandomState, RandomState> {
+impl BloomTree<HashSeed, HashSeed> {
     /// Construct a new BloomTree
     ///
     /// # Parameters
@@ -75,7 +81,7 @@ impl BloomTree<RandomState, RandomState> {
             root: None,
             kmer_size,
             // initializes random hash state to use for the whole tree
-            hash_states: (RandomState::new(), RandomState::new()),
+            hash_states: (HashSeed::new(), HashSeed::new()),
         }
     }
 
@@ -134,14 +140,14 @@ impl BloomTree<RandomState, RandomState> {
     /// # Parameters
     /// - `current_node`: BloomNode representating a leaf node already in the tree.
     /// - `new_node`: The BloomNode being added to the tree.
-    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
     ///
     /// # Returns
     /// - The new internal node, with children being the given leaf nodes.
     fn init_internal_node(
         current_node: Box<BloomNode>,
         new_node: Box<BloomNode>,
-        hash_states: &(RandomState, RandomState),
+        hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
         // get random number for internal node
         let mut rng = rand::thread_rng();
@@ -170,21 +176,21 @@ impl BloomTree<RandomState, RandomState> {
     /// This method traverses a BloomTree, adding a BloomNode where best fit
     /// in a greedy manner. This works by checking if the current node has children.
     /// If it has 2 children, then it will choose which one to check next based on the
-    /// minimum hamming distance. If it as 1 child, it add the new node to the current node.
-    /// If it's a leaf, then it create a new interal node, with the children being the new node
+    /// minimum hamming distance. If it has 1 child, it add the new node to the current node.
+    /// If it's a leaf, then it create a new internal node, with the children being the new node
     /// and the current node.
     ///
     /// # Parameters
     /// - `current_node`: The current BloomNode being evaluated (used recursively).
     /// - `node`: The BloomNode being added to the tree.
-    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
     ///
     /// # Returns
     /// - The current node after modification to self or children.
     fn add_to_tree(
         mut current_node: Box<BloomNode>,
         node: Box<BloomNode>,
-        hash_states: &(RandomState, RandomState),
+        hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
         // TODO: delete debug:
         println!("Looking at current node: {:?}", current_node.tax_id);
@@ -232,18 +238,74 @@ impl BloomTree<RandomState, RandomState> {
         }
         return current_node;
     }
+
+    /// This method saves the tree to disk using a given directory name.
+    ///
+    /// # Parameters
+    /// - `directory`: Directory name where the serialized tree will be stored.
+    ///
+    /// # Returns
+    /// - N/A
+    ///
+    /// # Panics
+    /// - if the directory does not exist.
+    pub fn save(&self, directory: &Path) {
+        // Create parent directories if they don't already exist
+        std::fs::create_dir_all(directory).unwrap();
+        // panics if it doesn't exist
+        if !directory.is_dir() {
+            panic!("Must provide a directory in which to store the tree");
+        }
+        // print where the tree is being saved.
+        println!(
+            "Saving bloom tree to directory {}",
+            directory.canonicalize().unwrap().to_str().unwrap()
+        );
+        // serialize the tree
+        let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
+        let json_tree = serde_json::to_string(self).unwrap();
+        tree_file.write(json_tree.as_bytes()).unwrap();
+    }
+
+    /// This method loads a serialized tree from disk into memory.
+    ///
+    /// # Parameters
+    /// - `directory`: Directory name where the serialized tree is located.
+    ///
+    /// # Returns
+    /// - N/A
+    ///
+    /// # Panics
+    /// - if the directory does not exist.
+    pub fn load(directory: &Path) -> BloomTree {
+        // panics if it doesn't exist
+        if !directory.is_dir() {
+            panic!("Must provide a directory in where a tree has been stored");
+        }
+        // print where the tree is being saved.
+        println!(
+            "Reading bloom tree from directory {}",
+            directory.canonicalize().unwrap().to_str().unwrap()
+        );
+        // serialized bloom tree path
+        let tree_file: File = File::open(directory.join(TREE_FILENAME)).unwrap();
+        // serialize the tree
+        let json_tree: BloomTree = serde_json::from_reader(tree_file).unwrap();
+
+        return json_tree;
+    }
 }
 
 impl BloomNode {
     /// Returns an instance of a BloomNode.
     ///
     /// # Parameters
-    /// - `hash_states`: randomized hash states made using std::collections::hash_map::RandomState
+    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
     /// - `tax_id`: The taxonimic identifier for the genome, or the NCBI accession.
     ///
     /// # Returns
     /// - a bool of whether the node is a leaf node.
-    fn new(hash_states: (RandomState, RandomState), tax_id: Option<String>) -> Self {
+    fn new(hash_states: (HashSeed, HashSeed), tax_id: Option<String>) -> Self {
         BloomNode {
             // initializes random hash state to use for the whole tree
             left_child: None,
@@ -293,29 +355,6 @@ pub(crate) fn create_bloom_tree(
 
     return bloom_tree;
 }
-
-// fn traverse_bloom_tree(bloom_node: &BloomNode) {
-//     // traverse left children
-//     match &bloom_node.left_child {
-//         None => println!("{:?}-left: NULL", bloom_node.tax_id),
-//         Some(child) => {
-//             println!("{:?}-left: {:?}", bloom_node.tax_id, child.tax_id);
-//             traverse_bloom_tree(child)
-//         }
-//     }
-
-//     // print current value.
-//     // println!("{:?}", bloom_node.tax_id);
-
-//     // traverse right children
-//     match &bloom_node.right_child {
-//         None => println!("{:?}-right: NULL", bloom_node.tax_id),
-//         Some(child) => {
-//             println!("{:?}-right: {:?}", bloom_node.tax_id, child.tax_id);
-//             traverse_bloom_tree(child)
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -512,5 +551,39 @@ mod tests {
             "Test failed for {:#?} and {:#?}",
             tree, expected_tree
         );
+    }
+
+    #[test]
+    fn test_save_load() {
+        let kmer_size = 4;
+        let rand_suffix: usize = rand::random();
+        // We add a random suffix to prevent parallel tests from conflicting with each other.
+        let scratch_dir_name = format!("test_tmp_{}/", rand_suffix);
+        let scratch_dir = Path::new(&scratch_dir_name);
+        let records1 = vec![
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "TTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "TTTAG".as_ref())),
+        ];
+
+        let records2 = vec![
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "GATCAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "GTTTAG".as_ref())),
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "GTTTAG".as_ref())),
+        ];
+
+        let tree1 = create_bloom_tree(records1, &kmer_size);
+
+        // Should be able to save and load the same tree
+        tree1.save(scratch_dir);
+        assert_eq!(BloomTree::load(scratch_dir), tree1);
+
+        // Saving overwrites existing saved tree
+        let tree2 = create_bloom_tree(records2, &kmer_size);
+        tree2.save(scratch_dir);
+        assert_eq!(BloomTree::load(scratch_dir), tree2);
+
+        // Cleanup scratch dir
+        std::fs::remove_dir_all(scratch_dir).unwrap();
     }
 }
