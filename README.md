@@ -23,6 +23,18 @@ Options:
   -V, --version            Print version information
 ```
 
+### Verbosity level
+
+The user can set the verbosity level. Below are different options for verbosity, which are available using the Rust [clap-verbosity-flag](https://crates.io/crates/clap-verbosity-flag) crate. If users want information about the tree being built, or other information about the particular run, use the `-vv` level of verbosity to get warnings and info.
+
+```
+-q silences output (Errors not shown.)
+-v show warnings
+-vv show info
+-vvv show debug
+-vvvv show trace
+```
+
 ## Examples
 
 1. Build the sequence bloom tree

@@ -56,6 +56,7 @@ pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
     if kmer_size > sequence.len() || kmer_size <= 0 {
         // Can't get kmers of a size longer than the sequence
         // Can't get kmers of size 0
+        log::error!("(get_kmers()) The kmer size is greater than the sequence length! kmer size:{} seq len:{}", kmer_size, sequence.len());
         return vec![];
     }
 
@@ -165,7 +166,7 @@ pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
 /// # Panics
 /// - N/A
 fn parse_genome_file(genomes_file_path: &String) -> Vec<RecordTypes> {
-    //println!("\nParsing file: {}\n", genomes_file_path);
+    log::debug!("Parsing file: {}", genomes_file_path);
     if genomes_file_path.ends_with(".fa")
         || genomes_file_path.ends_with(".fasta")
         || genomes_file_path.ends_with(".fna")
