@@ -14,3 +14,6 @@ clap = { version = "4.0.26", features = ["derive"] }
 rand = "*"
 rustc-hash = "1.1.0"
 serde = "1.0.147"
+clap-verbosity-flag = "2.0.0"
+log = "0.4.11"
+env_logger = "0.9.1"

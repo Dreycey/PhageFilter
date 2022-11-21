@@ -94,6 +94,11 @@ impl BloomTree<HashSeed, HashSeed> {
     /// # Returns
     /// - self, a BloomTree instance.
     fn insert(mut self, genome: &file_parser::RecordTypes) -> Self {
+        log::info!(
+            "(bloom tree; insert()) inserting {} into the tree",
+            file_parser::get_id(genome)
+        );
+
         // Create new leaf.
         let node: Box<BloomNode> = self.init_leaf(genome);
 
@@ -130,7 +135,7 @@ impl BloomTree<HashSeed, HashSeed> {
         for kmer in kmers {
             node.bloom_filter.insert(&kmer);
         }
-        println!("\tAdding {}", id);
+        log::debug!("(bloom tree; init()) Adding {}", id);
         return node;
     }
 
@@ -192,8 +197,10 @@ impl BloomTree<HashSeed, HashSeed> {
         node: Box<BloomNode>,
         hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
-        // TODO: delete debug:
-        println!("Looking at current node: {:?}", current_node.tax_id);
+        log::debug!(
+            "(bloom tree; add_to_tree()) Looking at current node: {:?}",
+            current_node.tax_id
+        );
         // if left or right child of current node is empty, add node.
         match (&current_node.left_child, &current_node.right_child) {
             (None, Some(_)) => {
@@ -257,8 +264,8 @@ impl BloomTree<HashSeed, HashSeed> {
             panic!("Must provide a directory in which to store the tree");
         }
         // print where the tree is being saved.
-        println!(
-            "Saving bloom tree to directory {}",
+        log::info!(
+            " (bloom tree; save()) Saving bloom tree to directory {}",
             directory.canonicalize().unwrap().to_str().unwrap()
         );
         // serialize the tree
@@ -283,8 +290,8 @@ impl BloomTree<HashSeed, HashSeed> {
             panic!("Must provide a directory in where a tree has been stored");
         }
         // print where the tree is being saved.
-        println!(
-            "Reading bloom tree from directory {}",
+        log::info!(
+            "(bloom tree; load()) Reading bloom tree from directory {}",
             directory.canonicalize().unwrap().to_str().unwrap()
         );
         // serialized bloom tree path
@@ -350,7 +357,6 @@ pub(crate) fn create_bloom_tree(
     // add genomes to bloom tree
     for genome in parsed_genomes {
         bloom_tree = bloom_tree.insert(&genome);
-        println!("NEW GENOME added to bloom tree");
     }
 
     return bloom_tree;
