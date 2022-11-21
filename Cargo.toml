@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 bio = "*"
-bit-vec = { version = "0.6", features = ["serde"] }
+bitvec = { version = "1.0.1", features = ["serde"] }
 rayon = "1.5.3"
 clap = { version = "4.0.26", features = ["derive"] }
 rand = "*"
