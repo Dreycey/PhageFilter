@@ -52,7 +52,10 @@ use std::hash::{BuildHasher, Hash};
 pub fn get_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
     let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
     let expected_num_items: u32 = max_genome_size;
-    println!("number of items expected: {}\n", expected_num_items);
+    log::debug!(
+        "(Building BF) number of items expected: {}\n",
+        expected_num_items
+    );
     // out of 100 items that are not inserted, expect 0.1 to return true for contain
     let false_positive_rate: f32 = 0.001;
     // instantiate a BloomFilter

@@ -3,6 +3,8 @@ mod bloom_tree;
 mod file_parser;
 mod query;
 use clap::{arg, Parser, Subcommand};
+use clap_verbosity_flag::Verbosity;
+use log;
 use std::fs::File;
 use std::path::Path;
 
@@ -15,6 +17,9 @@ use std::path::Path;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Print log statements to stdout.
+    #[command(flatten)]
+    verbose: Verbosity,
 }
 
 #[derive(Subcommand)]
@@ -56,9 +61,13 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
+    // logging verbosity level
+    env_logger::Builder::new()
+        .filter_level(cli.verbose.log_level_filter())
+        .init();
+    log::info!("\n verbosity level: {} \n", cli.verbose.log_level_filter());
 
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level cmd
+    // parse subcommands.
     match &cli.command {
         Commands::Build {
             genomes,
@@ -67,9 +76,11 @@ fn main() {
             kmer_size,
         } => {
             // initial message to show used parameters.
-            println!(
+            log::info!(
                 "\n Build input-  \n\tdb:{} \n\tthreads:{} \n\tkmersize:{} \n",
-                db_path, threads, kmer_size
+                db_path,
+                threads,
+                kmer_size
             );
             // number of threads to run
             rayon::ThreadPoolBuilder::new()
@@ -94,7 +105,7 @@ fn main() {
             cuttoff_threshold,
         } => {
             // initial message to show used parameters.
-            println!(
+            log::info!(
                 "\n Query input- \n\treads:{} \n\tthreads:{}, \n\tout:{}, \n\tdb_path:{}, \n\tthreads:{} \n\tcuttoff_threshold:{} \n",
                 reads, threads, out, db_path, threads, cuttoff_threshold
             );
