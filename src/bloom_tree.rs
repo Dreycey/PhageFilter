@@ -17,7 +17,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-const TREE_FILENAME: &'static str = "tree.json";
+const TREE_FILENAME: &'static str = "tree.bin";
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
@@ -263,8 +263,8 @@ impl BloomTree<HashSeed, HashSeed> {
         );
         // serialize the tree
         let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
-        let json_tree = serde_json::to_string(self).unwrap();
-        tree_file.write(json_tree.as_bytes()).unwrap();
+        let serialized_tree = bincode::serialize(self).unwrap();
+        tree_file.write(&serialized_tree).unwrap();
     }
 
     /// This method loads a serialized tree from disk into memory.
@@ -290,9 +290,9 @@ impl BloomTree<HashSeed, HashSeed> {
         // serialized bloom tree path
         let tree_file: File = File::open(directory.join(TREE_FILENAME)).unwrap();
         // serialize the tree
-        let json_tree: BloomTree = serde_json::from_reader(tree_file).unwrap();
+        let deserialized_tree: BloomTree = bincode::deserialize_from(tree_file).unwrap();
 
-        return json_tree;
+        return deserialized_tree;
     }
 }
 
