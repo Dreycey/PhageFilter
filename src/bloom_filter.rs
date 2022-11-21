@@ -40,7 +40,7 @@
 /// filter.contains(&1); /* true */
 /// filter.contains(&2); /* false */
 /// ```
-use bitvec::prelude::*;
+use bitvec_simd::BitVec;
 mod hash_iter;
 pub mod hasher;
 use hasher::HashSeed;
@@ -107,10 +107,8 @@ impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
     /// Calculates the distance between two
     /// bloom filters using the hamming_distance.
     fn distance(&self, other: &BloomFilter) -> usize {
-        let mut diff_1 = self.bits.clone();
-        diff_1 ^= &other.bits;
-        // // The Hamming Distance is the number of bits that differ between the two bitvecs.
-        let hamming_distance: usize = diff_1.count_ones();
+        // The Hamming Distance is the number of bits that differ between the two bitvecs.
+        let hamming_distance: usize = self.bits.xor_cloned(&other.bits).count_ones();
         return hamming_distance;
     }
 }
@@ -126,7 +124,7 @@ impl BloomFilter<HashSeed, HashSeed> {
         let (hash_builder_one, hash_builder_two) = hash_states;
         BloomFilter {
             // Initialize all bits to zero
-            bits: bitvec![0; num_bits],
+            bits: BitVec::zeros(num_bits),
             num_hashes: num_hashes,
             hash_builder_one,
             hash_builder_two,
@@ -246,7 +244,7 @@ where
 
     /// Remove all values from this BloomFilter
     fn clear(&mut self) {
-        self.bits.clear();
+        self.bits.set_all_false();
     }
 }
 
@@ -287,12 +285,12 @@ mod tests {
 
     #[test]
     fn test_distance() {
-        let b1 = get_static_bloom_filter(BitVec::from_bitslice(0b00101101.view_bits()));
-        let b2 = get_static_bloom_filter(BitVec::from_bitslice(0b10100111.view_bits()));
-        let expected_distance = 3;
+        let b1 = get_static_bloom_filter(BitVec::from_slice_copy(&[0b00101101], 8));
+        let b2 = get_static_bloom_filter(BitVec::from_slice_copy(&[0b10100111], 8));
+        let expected_distance: usize = 3;
 
-        let b_none = get_static_bloom_filter(BitVec::from_bitslice(0b00000000.view_bits()));
-        let b_all = get_static_bloom_filter(BitVec::from_bitslice(0b11111111.view_bits()));
+        let b_none = get_static_bloom_filter(BitVec::from_slice_copy(&[0b00000000], 8));
+        let b_all = get_static_bloom_filter(BitVec::from_slice_copy(&[0b11111111], 8));
 
         assert_eq!(b1.distance(&b2), expected_distance);
         assert_eq!(b2.distance(&b1), expected_distance);
