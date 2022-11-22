@@ -11,6 +11,11 @@ python benchmarking/bench.py genomecount -g examples/genomes/viral_genome_dir/ -
 ```
 python benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -f examples/test_reads/simulated_reads.fa -r res.csv
 ```
+
+* relative performance benchmarking
+```
+python benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -r res.csv -t examples/test_reads/ -c bench_config.yaml
+```
 """
 from abc import ABC, abstractmethod
 from enum import Enum, auto
@@ -321,10 +326,15 @@ class BenchmarkingTests:
         # close result file
         result_file.close()
 
+    @staticmethod
+    def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: Path):
+        raise NotImplementedError
+
 
 class SubparserNames(Enum):
     parameterization = "parameterization"
     genomecount = "genomecount"
+    relative_performance = "relative_performance"
 
 
 def parseArgs(argv=None) -> argparse.Namespace:
@@ -372,6 +382,18 @@ def parseArgs(argv=None) -> argparse.Namespace:
     genomecount_parser.add_argument(
         "-t", "--threads", default=4, nargs='?', type=int, help="number of threads to use [Default 4]", required=False)
 
+    # relative_performance
+    relative_performance_parser = subparsers.add_parser(
+        SubparserNames.relative_performance.value)
+    relative_performance_parser.add_argument(
+        "-g", "--genome_dir", type=Path, help="Path to the genome directory", required=True)
+    relative_performance_parser.add_argument(
+        "-r", "--result_csv", type=Path, help="Path to the result CSV (output)", required=True)
+    relative_performance_parser.add_argument(
+        "-t", "--test_directory", type=Path, help="path to the directory with simulated test reads.", required=True)
+    relative_performance_parser.add_argument(
+        "-c", "--config", type=Path, help="path to the configuration file", required=True)
+
     return parser.parse_args(argv)
 
 
@@ -383,6 +405,7 @@ def main():
 
     # run benchmark type specified
     if (args.sub_parser == SubparserNames.parameterization.value):
+        print(f"Performing parameterization benchmarking...")
         # create tool interfaces
         phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
 
@@ -398,6 +421,12 @@ def main():
         # run test
         BenchmarkingTests.benchtest_genomecount(phagefilter, args.genome_dir,
                                                 args.database_name, args.result_csv)
+
+    elif (args.sub_parser == SubparserNames.relative_performance.value):
+        print(f"Performing relative performance benchmarking...")
+        # run test
+        BenchmarkingTests.benchtest_relative_performance(
+            args.genome_dir, args.config, args.result_csv)
     else:
         print(__doc__)
 
