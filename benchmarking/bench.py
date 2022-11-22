@@ -342,7 +342,7 @@ def parseArgs(argv=None) -> argparse.Namespace:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", "--verbose", action="store_true")
 
-    # if ≈
+    # if parameterization
     parameterization_parser = subparsers.add_parser(
         SubparserNames.parameterization.value)
     parameterization_parser.add_argument(
