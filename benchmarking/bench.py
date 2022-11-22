@@ -1,6 +1,10 @@
 """
 Benchmarking module for PhageFilter.
 
+Install:
+    1. Yaml - https://pyyaml.org/wiki/PyYAMLDocumentation
+    2. Kraken2 - https://github.com/DerrickWood/kraken2/wiki
+
 Examples:
 * running genome count benchmarking
 ```
@@ -14,7 +18,7 @@ python benchmarking/bench.py parameterization -g examples/genomes/viral_genome_d
 
 * relative performance benchmarking
 ```
-python benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -r res.csv -t examples/test_reads/ -c bench_config.yaml
+python benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -r res.csv -t examples/test_reads/ -c benchmarking/config.yaml
 ```
 """
 from abc import ABC, abstractmethod
@@ -31,6 +35,7 @@ from typing import List, Tuple, Dict
 from pathlib import Path
 from dataclasses import dataclass
 import argparse
+import yaml
 
 GENOME_SUBDIR = "genome/"
 
@@ -46,7 +51,6 @@ class BenchmarkResult:
     elapsed_time: int
     # Memory in bytes?
     max_memory: int
-
 
 class Experiment:
     def __init__(self, num_genomes: int, source_genomes_dir: Path):
@@ -86,7 +90,8 @@ def run_command(arguments: List) -> BenchmarkResult:
     path.
     """
     start_time = time.monotonic_ns()
-    result = subprocess.run(arguments)
+    for command in arguments:
+        result = subprocess.run(command)
     end_time = time.monotonic_ns()
     end_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
 
@@ -147,7 +152,6 @@ def get_classification_metrics(true_map, out_map):
     precision = TP / (TP + FP)
     return recall, precision
 
-
 class ToolOp(ABC):
     """
     Defines a tool and sub-operations.
@@ -190,7 +194,7 @@ class PhageFilter(ToolOp):
         self.threads = threads
         self.db_path = None
 
-    def parse_output(self, output_path: Path) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path=None) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.
@@ -222,9 +226,9 @@ class PhageFilter(ToolOp):
         build_cmd += ["--kmer-size", f"{self.k}"]
         build_cmd += ["-t", f"{self.threads}"]
         self.db_path = db_path
-        return build_cmd
+        return [build_cmd]
 
-    def run(self, fasta_file: Path, output_path: Path, phagefilter_db: Path):
+    def run(self, fasta_file: Path, output_path: Path):
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 
@@ -235,18 +239,145 @@ class PhageFilter(ToolOp):
         Returns:
             N/A.
         """
-        if not os.path.exists(phagefilter_db):
-            print("Must first build")
-            return None
-        else:
-            self.db_path = phagefilter_db
+        if not self.db_path:
+            print("Must first build (PhageFilter)")
+            exit()
         run_cmd = ["cargo", "run", "--", "query"]
         run_cmd += ["--reads", f"{fasta_file}"]
         run_cmd += ["--db-path", f"{self.db_path}"]
+        run_cmd += ["--cuttoff-threshold", f"{self.theta}"]
         run_cmd += ["--out", f"{output_path}"]
         run_cmd += ["-t", f"{self.threads}"]
-        return run_cmd
+        return [run_cmd]
 
+
+class Kraken2(ToolOp):
+
+    def __init__(self, kmer_size: int = 35, threads=4):
+        """_summary_
+
+        Args:
+            kmer_size (int): _description_
+            filter_thresh (float): _description_
+            threads (int, optional): _description_. Defaults to 4.
+        """
+        self.k = kmer_size
+        self.threads = threads
+        self.db_path = None
+
+    def parse_output(self, output_path: Path, genomes_path: Path) -> Dict[str, int]:
+        """_summary_
+        parses an output file/directory (depends on tool)
+        returns a dictionary of the output of PhageFilter.
+
+        Args:
+            output_path (Path): Path where the output of PhageFilter
+                                will be stored.
+
+        Returns:
+            Dict[str, int]: A map from NCBI ID to read count
+        """
+        taxid2ncbi = self.get_taxid2ncbi(genomes_path)
+        name2counts = {}
+        with open(output_path) as out_file:
+            line = out_file.readline()
+            count = 0
+            while line:
+                count, tax_level, taxid = line.strip("\n").split("\t")[2:5]
+                if tax_level == "S" or tax_level == "S1" and int(count) > 0:
+                    if taxid in taxid2ncbi:
+                        for ncbi_id in taxid2ncbi[taxid]:
+                            name2counts[ncbi_id] = int(count)
+                line = out_file.readline()
+        return name2counts
+
+    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 7):
+        """
+        run tool, based on input arguments, it outputs a CMD-line array.
+        """
+        build_cmds = []
+        # get map from NCBI ID to taxid
+        self.taxid2ncbi = self.get_taxid2ncbi(genomes_path)
+
+        # make DB
+        build_cmds.append(["mkdir", "-p", f"{db_path}/taxonomy/"])
+
+        # download NCBI taxonomy
+        taxdump_ftp='https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.zip'
+        if not os.path.exists("new_taxdump.zip"):
+            build_cmds.append(["wget", f"{taxdump_ftp}"])
+        build_cmds.append(["unzip", "new_taxdump.zip", "-d", f"{db_path}taxonomy/"])
+
+        # download NCBI accession2taxid
+        nucl_wgs_ftp='https://ftp.ncbi.nih.gov/pub/taxonomy/accession2taxid/nucl_gb.accession2taxid.gz'
+        if not os.path.exists("nucl_gb.accession2taxid.gz"):
+            build_cmds.append(["wget", f"{nucl_wgs_ftp}"])
+        build_cmds.append(["gzip", "-d", "-k", "nucl_gb.accession2taxid.gz"])
+        build_cmds.append(["mv", "nucl_gb.accession2taxid", f"{db_path}taxonomy/nucl_gb.accession2taxid"])
+
+        # add genomic files
+        for genome in os.listdir(genomes_path):
+            build_cmd = ["kraken2-build", "--add-to-library", f"{genomes_path / Path(genome)}"]
+            build_cmd += ["--db", f"{db_path}"]
+            build_cmds.append(build_cmd)
+
+        # build command
+        build_cmd = ["kraken2-build", "--build"]
+        build_cmd += ["--db", f"{db_path}"]
+        build_cmd += ["--kmer-len", f"{self.k}"]
+        build_cmd += ["--minimizer-len", f"{minimizer_len}"]
+        build_cmd += ["--minimizer-spaces", f"{minimizer_spacing}"]
+        build_cmd += ["--fast-build"]
+        build_cmds.append(build_cmd)
+
+        # update DB path
+        self.db_path = db_path
+
+        return build_cmds
+
+    def run(self, fasta_file: Path, output_path: Path):
+        """_summary_
+        run tool, based on input arguments, it outputs a CMD-line array.
+
+        Args:
+            fasta_file (Path): Path to simualted reads.
+            output_path (Path): Desired path for the output file.
+
+        Returns:
+            N/A.
+        """
+        if not self.db_path:
+            print("Must first build (Kraken2)")
+            exit()
+        run_cmd = ["kraken2", "--db", f"{self.db_path}", f"{fasta_file}", "--report", f"{output_path}"] #"--output", f"{output_path}"
+        return [run_cmd]
+
+    @staticmethod
+    def get_taxid2ncbi(genomes_path: Path) -> Dict[str, int]:
+        """_summary_
+        This function is used for mapping taxonomy IDs to NCBI accessions. This is useful when
+        comparing the output of Kraken2 to PhageFilter.
+        
+        Args:
+            genomes_path (Path): Path to the directory of genomes used to build the Kraken2 DB
+
+        Returns:
+            Dict[str, int]: An output dictionary mapping NCBI taxomony IDs to NCBI IDs
+        """
+        ncbi2tax = {}
+        for genome in os.listdir(genomes_path):
+            with open(os.path.join(genomes_path, genome), 'r') as f:
+                line = f.readline()
+                while line:
+                    if line.startswith(">"):
+                        ncbi = line.strip(">").strip("\n").split("|kraken:taxid|")[1].strip()
+                        taxid = line.strip(">").strip("\n").split(" ")[0].strip()
+                        if ncbi in ncbi2tax:
+                            ncbi2tax[ncbi].append(taxid)
+                        else:
+                            ncbi2tax[ncbi] = [taxid]
+                    line = f.readline()
+        return ncbi2tax
 
 class BenchmarkingTests:
     """_summary_
@@ -254,21 +385,26 @@ class BenchmarkingTests:
     """
 
     @staticmethod
-    def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path):
+    def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count=10):
         """_summary_
+        Performs benchmarking of PhageFilter to obtain an estimate on the impact on time and memory usage
+        of having N genomes in the database.
 
         Args:
-            phagefilter (PhageFilter): _description_
-            genome_path (Path): _description_
-            phagefilter_db (Path): _description_
-            result_csv (Path): _description_
+            phagefilter (PhageFilter): instance of PhageFilter
+            genome_path (Path): Path to the genome directory
+            phagefilter_db (Path): Path to the DB for benchmarking (will rewrite for each combination)
+            result_csv (Path): Path to desired output file.
         """
+        # segment the number of genomes checked so that 10 variations (or 'variation_count') are tested.
+        number_of_genomes = len(os.listdir(genome_path))
+        step_size = int(number_of_genomes/variation_count)+1
+
         # benchmark impact of number of genomes on build.
         genomecount2Result: Dict[int, BenchmarkResult] = {}
-        for genome_count in [1, 3, 5]:
+        for genome_count in range(step_size, number_of_genomes, step_size):
             with Experiment(genome_count, genome_path) as exp:
                 # run tool on tmp build directory
-                print(exp.genome_dir())
                 pf_build_cmd = phagefilter.build(
                     phagefilter_db, exp.genome_dir())
                 genomecount2Result[genome_count] = run_command(pf_build_cmd)
@@ -300,9 +436,8 @@ class BenchmarkingTests:
         # perform a parameterization for kmer_size and theta.
         truth_map = get_true_maps(input_fasta)
         result_file = open(result_csv, "w+")
-        result_file.write(
-            "kmer size, theta, time, memory, recall, precision\n")
-        for kmer_size in [2, 10, 15, 20, 25]:
+        result_file.write("kmer size, theta, time, memory, recall, precision\n")
+        for kmer_size in [10, 15, 20, 25]:
             # build a tree for each kmer_size
             phagefilter.k = kmer_size  # update kmer_size
             pf_build_cmd = phagefilter.build(phagefilter_db, genome_path)
@@ -313,8 +448,7 @@ class BenchmarkingTests:
                 # update theta.
                 phagefilter.theta = theta
                 # query
-                pf_run_cmd = phagefilter.run(
-                    input_fasta, output_file, phagefilter_db)
+                pf_run_cmd = phagefilter.run(input_fasta, output_file)
                 run_result: BenchmarkResult = run_command(pf_run_cmd)
                 # benchmark
                 result_map = phagefilter.parse_output(output_file)
@@ -327,9 +461,49 @@ class BenchmarkingTests:
         result_file.close()
 
     @staticmethod
-    def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: Path):
-        raise NotImplementedError
+    def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: Path, test_directory: Path):
+        """_summary_
+        This function performs the relative performance benchmarking of PhageFilter,
+        showing how accuracy and precision compare to other tools.
 
+        Args:
+            genome_path (Path): Path to the genome directory
+            config (Path): Path to a tool configuration file (default in provided directory)
+            result_csv (Path): Path to desired output file.
+            test_directory (Path): Path to directory of test reads (Fasta/Fastq)
+        """
+        configuration = yaml.load(open(f"{config}", "r"), Loader=yaml.SafeLoader)
+
+        # create tool instances
+        kraken2 = Kraken2(kmer_size=configuration["Kraken2"]["kmer_size"])
+        phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
+        tools = {"Kraken2": kraken2, "PhageFilter": phagefilter}
+        
+        # build DBs, if not exists
+        for toolname, tool in tools.items():
+            tool_DB = configuration[toolname]["database_name"]
+            if not os.path.exists(tool_DB):
+                tool_build_cmd = tool.build(tool_DB, genome_path)
+                tool_build_result: BenchmarkResult = run_command(tool_build_cmd)
+            else:
+                tool.db_path = tool_DB
+
+        # benchmark on test files.
+        with open(result_csv, "w+") as result_file:
+            result_file.write("tool name, test name, time, memory, recall, precision\n")
+            for test_file in os.listdir(test_directory):
+                test_file_path = os.path.join(test_directory, test_file)
+                truth_map = get_true_maps(test_file_path)
+                test_name = test_file.strip('.fna')
+                for tool_name, tool in tools.items():
+                    output_path = f"{tool_name}_{test_name}"
+                    run_cmd = tool.run(test_file_path, output_path)
+                    run_result: BenchmarkResult = run_command(run_cmd)
+                    # benchmark
+                    result_map = tool.parse_output(output_path, genomes_path=genome_path)
+                    recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
+                    # save to file
+                    result_file.write(f"{tool_name}, {test_name}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}\n")
 
 class SubparserNames(Enum):
     parameterization = "parameterization"
@@ -426,7 +600,8 @@ def main():
         print(f"Performing relative performance benchmarking...")
         # run test
         BenchmarkingTests.benchtest_relative_performance(
-            args.genome_dir, args.config, args.result_csv)
+            args.genome_dir, args.config, args.result_csv, args.test_directory)
+
     else:
         print(__doc__)
 
