@@ -1,0 +1,9 @@
+PhageFilter:
+  database_name: "tree_3"
+  kmer_size: 15
+  theta: 0.2
+Kraken2:
+  database_name: "krakenDB/"
+  kmer_size: 35
+  minimizer_len: 31
+  minimizer_spacing: 7
