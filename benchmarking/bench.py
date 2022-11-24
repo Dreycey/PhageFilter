@@ -13,7 +13,7 @@ python benchmarking/bench.py genomecount -g examples/genomes/viral_genome_dir/ -
 
 * running parameterization benchmarking
 ```
-python benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -f examples/test_reads/simulated_reads.fa -r res_parameterization.csv
+python benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -t examples/test_reads/ -r res_parameterization.csv
 ```
 
 * relative performance benchmarking
@@ -36,6 +36,7 @@ from pathlib import Path
 from dataclasses import dataclass
 import argparse
 import yaml
+import numpy as np
 
 GENOME_SUBDIR = "genome/"
 
@@ -151,6 +152,17 @@ def get_classification_metrics(true_map, out_map):
     recall = TP / (TP + FN)
     precision = TP / (TP + FP)
     return recall, precision
+
+def get_readcount_metrics(true_map, out_map):
+    """
+    uses true map and PhageFilter map to obtain metrics
+    of the read count error.
+    """
+    absolute_difference = []
+    for genome, count in out_map.items():
+        if genome in true_map.keys():
+            absolute_difference.append(abs(count - true_map[genome]))
+    return absolute_difference
 
 class ToolOp(ABC):
     """
@@ -417,7 +429,7 @@ class BenchmarkingTests:
                     f"{genome_count}, {result.elapsed_time}, {result.max_memory}\n")
 
     @staticmethod
-    def benchtest_parameter_sweep(phagefilter: PhageFilter, input_fasta: Path, phagefilter_db: Path, genome_path: Path, result_csv: Path):
+    def benchtest_parameter_sweep(phagefilter: PhageFilter, test_directory: Path, phagefilter_db: Path, genome_path: Path, result_csv: Path):
         """_summary_
         Performs a parameter sweep for different combinations of
         kmer size and theta. For each combination it saves the output
@@ -425,7 +437,7 @@ class BenchmarkingTests:
 
         Args:
             phagefilter (PhageFilter): instance of PhageFilter
-            input_fasta (Path): Path to the simulated reads file (Fasta or Fastq)
+            test_directory (Path): Path to directory of test reads (Fasta/Fastq)
             phagefilter_db (Path): Path to the DB for benchmarking (will rewrite for each combination)
             genome_path (Path): Path to the genome directory
             result_csv (Path): Path to desired output file.
@@ -434,9 +446,8 @@ class BenchmarkingTests:
             N/A
         """
         # perform a parameterization for kmer_size and theta.
-        truth_map = get_true_maps(input_fasta)
         result_file = open(result_csv, "w+")
-        result_file.write("kmer size, theta, time, memory, recall, precision\n")
+        result_file.write("kmer size, theta, time, memory, recall, precision, read count error\n")
         for kmer_size in [10, 15, 20, 25]:
             # build a tree for each kmer_size
             phagefilter.k = kmer_size  # update kmer_size
@@ -444,18 +455,22 @@ class BenchmarkingTests:
             run_command(pf_build_cmd)
             # test tree on kmer size for different thresholds.
             for theta in [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]:
-                output_file = f"phagefilter_{kmer_size}_{theta}.csv"
-                # update theta.
-                phagefilter.theta = theta
-                # query
-                pf_run_cmd = phagefilter.run(input_fasta, output_file)
-                run_result: BenchmarkResult = run_command(pf_run_cmd)
-                # benchmark
-                result_map = phagefilter.parse_output(output_file)
-                recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
-                # save to file
-                result_file.write(
-                    f"{kmer_size}, {theta}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}\n")
+                for test_file in os.listdir(test_directory):
+                    test_file_path = os.path.join(test_directory, test_file)
+                    output_file = f"phagefilter_{kmer_size}_{theta}_{test_file}.csv"
+                    # update theta.
+                    phagefilter.theta = theta
+                    # query
+                    pf_run_cmd = phagefilter.run(test_file_path, output_file)
+                    run_result: BenchmarkResult = run_command(pf_run_cmd)
+                    # benchmark
+                    truth_map = get_true_maps(test_file_path)
+                    result_map = phagefilter.parse_output(output_file)
+                    recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
+                    read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
+                    # save to file
+                    result_file.write(
+                        f"{kmer_size}, {theta}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
         # close result file
         result_file.close()
 
@@ -489,7 +504,7 @@ class BenchmarkingTests:
 
         # benchmark on test files.
         with open(result_csv, "w+") as result_file:
-            result_file.write("tool name, test name, time, memory, recall, precision\n")
+            result_file.write("tool name, test name, time, memory, recall, precision, read count error\n")
             for test_file in os.listdir(test_directory):
                 test_file_path = os.path.join(test_directory, test_file)
                 truth_map = get_true_maps(test_file_path)
@@ -501,8 +516,9 @@ class BenchmarkingTests:
                     # benchmark
                     result_map = tool.parse_output(output_path, genomes_path=genome_path)
                     recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
+                    read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
                     # save to file
-                    result_file.write(f"{tool_name}, {test_name}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}\n")
+                    result_file.write(f"{tool_name}, {test_name}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
 
 class SubparserNames(Enum):
     parameterization = "parameterization"
@@ -529,7 +545,7 @@ def parseArgs(argv=None) -> argparse.Namespace:
     parameterization_parser = subparsers.add_parser(
         SubparserNames.parameterization.value)
     parameterization_parser.add_argument(
-        "-f", "--input_fasta", type=Path, help="Path to the simulated reads.", required=True)
+        "-t", "--test_directory", type=Path, help="path to the directory with simulated test reads.", required=True)
     parameterization_parser.add_argument(
         "-g", "--genome_dir", type=Path, help="Path to the genome directory", required=True)
     parameterization_parser.add_argument(
@@ -539,7 +555,7 @@ def parseArgs(argv=None) -> argparse.Namespace:
     parameterization_parser.add_argument(
         "-k", "--kmer_size", default=20, nargs='?', type=int, help="size of kmer to use [default 20]", required=False)
     parameterization_parser.add_argument(
-        "-t", "--threads", help="number of threads to use [Default 4]", required=False)
+        "--threads", help="number of threads to use [Default 4]", required=False)
 
     # if genomecount
     genomecount_parser = subparsers.add_parser(
@@ -553,7 +569,7 @@ def parseArgs(argv=None) -> argparse.Namespace:
     genomecount_parser.add_argument(
         "-k", "--kmer_size", default=20, nargs='?', type=int, help="size of kmer to use [default 20]", required=False)
     genomecount_parser.add_argument(
-        "-t", "--threads", default=4, nargs='?', type=int, help="number of threads to use [Default 4]", required=False)
+        "--threads", default=4, nargs='?', type=int, help="number of threads to use [Default 4]", required=False)
 
     # relative_performance
     relative_performance_parser = subparsers.add_parser(
@@ -584,7 +600,7 @@ def main():
 
         # run test
         BenchmarkingTests.benchtest_parameter_sweep(
-            phagefilter, args.input_fasta, args.database_name, args.genome_dir, args.result_csv)
+            phagefilter, args.test_directory, args.database_name, args.genome_dir, args.result_csv)
 
     elif (args.sub_parser == SubparserNames.genomecount.value):
         print(f"Performing genome count benchmarking...")
