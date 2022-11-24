@@ -8,17 +8,17 @@ Install:
 Examples:
 * running genome count benchmarking
 ```
-python benchmarking/bench.py genomecount -g examples/genomes/viral_genome_dir/ -r res.csv
+python benchmarking/bench.py genomecount -g examples/genomes/viral_genome_dir/ -r res_genomes.csv
 ```
 
 * running parameterization benchmarking
 ```
-python benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -f examples/test_reads/simulated_reads.fa -r res.csv
+python benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -f examples/test_reads/simulated_reads.fa -r res_parameterization.csv
 ```
 
 * relative performance benchmarking
 ```
-python benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -r res.csv -t examples/test_reads/ -c benchmarking/config.yaml
+python benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -r res_relative_performance.csv -t examples/test_reads/ -c benchmarking/config.yaml
 ```
 """
 from abc import ABC, abstractmethod
@@ -452,8 +452,7 @@ class BenchmarkingTests:
                 run_result: BenchmarkResult = run_command(pf_run_cmd)
                 # benchmark
                 result_map = phagefilter.parse_output(output_file)
-                recall, precision = get_classification_metrics(
-                    true_map=truth_map, out_map=result_map)
+                recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
                 # save to file
                 result_file.write(
                     f"{kmer_size}, {theta}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}\n")
@@ -550,7 +549,7 @@ def parseArgs(argv=None) -> argparse.Namespace:
     genomecount_parser.add_argument(
         "-r", "--result_csv", type=Path, help="Path to the result CSV (output)", required=True)
     genomecount_parser.add_argument(
-        "-db", "--database_name", default=Path("tree2/"), nargs='?', type=Path, help="path to the DB to use [default 'tree2/']", required=False)
+        "-db", "--database_name", default=Path("tree1/"), nargs='?', type=Path, help="path to the DB to use [default 'tree2/']", required=False)
     genomecount_parser.add_argument(
         "-k", "--kmer_size", default=20, nargs='?', type=int, help="size of kmer to use [default 20]", required=False)
     genomecount_parser.add_argument(
