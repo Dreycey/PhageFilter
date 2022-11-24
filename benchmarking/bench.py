@@ -4,6 +4,7 @@ Benchmarking module for PhageFilter.
 Install:
     1. Yaml - https://pyyaml.org/wiki/PyYAMLDocumentation
     2. Kraken2 - https://github.com/DerrickWood/kraken2/wiki
+    3. make sure to build on release mode before running
 
 Examples:
 * running genome count benchmarking
@@ -232,7 +233,7 @@ class PhageFilter(ToolOp):
         """
         run tool, based on input arguments, it outputs a CMD-line array.
         """
-        build_cmd = ["cargo", "run", "--", "build"]
+        build_cmd = ["./target/release/phage_filter", "build"]
         build_cmd += ["--genomes", f"{genomes_path}"]
         build_cmd += ["--db-path", f"{db_path}"]
         build_cmd += ["--kmer-size", f"{self.k}"]
@@ -254,7 +255,7 @@ class PhageFilter(ToolOp):
         if not self.db_path:
             print("Must first build (PhageFilter)")
             exit()
-        run_cmd = ["cargo", "run", "--", "query"]
+        run_cmd = ["./target/release/phage_filter", "query"]
         run_cmd += ["--reads", f"{fasta_file}"]
         run_cmd += ["--db-path", f"{self.db_path}"]
         run_cmd += ["--cuttoff-threshold", f"{self.theta}"]
