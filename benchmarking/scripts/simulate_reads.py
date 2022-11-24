@@ -3,11 +3,14 @@ Description:
     This script is used to generate exact substrings of
     a given genome (in fasta format).
 
+For more information, see
+    python3 benchmarking/scripts/simulate_reads.py -h
+
 Usage:
     python benchmarking/simulate_reads.py <fasta genome path> <number of reads/substrings> <output file> <read length>
 
 Example:
-    python benchmarking/simulate_reads.py genomes/GCF_000912255.1_ViralProj226726_genomic.fna 1000 simulated_reads.fa 100
+    python benchmarking/scripts/simulate_reads.py examples/genomes/viral_genome_dir/GCF_000912255.1_ViralProj226726_genomic.fna 1000 simulated_reads.fa 100 0.2
 
 For many genomes:
 ```bash
@@ -16,11 +19,47 @@ For many genomes:
     simulated_reads.fa 1000; done
 ```
 """
+import os
 import sys
 import random 
+from pathlib import Path
+import argparse
+from enum import Enum
+import tempfile
+import shutil
 
+GENOME_SUBDIR = "genomes"
 
+class Experiment:
+    def __init__(self, num_genomes: int, source_genomes_dir: Path):
+        # Keep track of the seed for reproducability
+        self.seed = random.randint(0, sys.maxsize)
+        random.seed(self.seed)
 
+        # Make a temporary directory that can hold the randomly sampled genome files
+        self.tmp_dir = tempfile.mkdtemp()
+
+        genome_files = list(source_genomes_dir.iterdir())
+        selected_genomes = random.sample(genome_files, num_genomes)
+        print(self.genome_dir())
+
+        # make genome subdirectory before copying into it
+        os.mkdir(self.genome_dir())
+        for file in selected_genomes:
+            shutil.copy2(file, self.genome_dir())
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for file in os.listdir(self.genome_dir()):
+            os.unlink(os.path.join(self.genome_dir(), file))
+        os.rmdir(self.genome_dir())
+        os.rmdir(self.tmp_dir)
+
+    def genome_dir(self) -> str:
+        return os.path.join(self.tmp_dir, GENOME_SUBDIR)
+    
 def parse_fasta(file_name):
     """
     fasta to genome string.
@@ -45,25 +84,102 @@ def simulate_reads(genome, name, read_count, outfile, readlength=100, error_rate
     it creates a fasta of perfect substrings.
     """
     print(f"Simulating reads to: {outfile}")
-    reads_added = 0
+    reads_added = 1
     with open(outfile, "a+") as out:
-        while reads_added < read_count:
-            start = random.randint(0, len(genome)-read_length)
+        while reads_added < read_count+1:
+            start = random.randint(0, len(genome)-readlength)
             stop = start + readlength
             read = list(genome[start:stop])
-            if random.uniform(0, 1) < error_rate:
-                base2change = random.randint(0, len(read)-1)
-                read[base2change] = random.choice(["A", "C", "T", "G"])
+            for base2change in range(0, len(read)):
+                if random.uniform(0, 1) < error_rate:
+                    #base2change = random.randint(0, len(read)-1)
+                    read[base2change] = random.choice(["A", "C", "T", "G"])
             read = "".join(read)
             out.write(f">{name}_{reads_added}\n{read}\n")
             reads_added += 1
 
+def multi_simulate(genome_directory, number_of_genomes, read_count, outfile, readlength=100, error_rate=0.0):
+    """
+    Simulates reads for multiple genomes.
+    """
+    print(genome_directory, number_of_genomes, read_count, outfile, readlength, error_rate)
+
+    # create subset of sampled genomes, and simulate reads from each.
+    read_count_per_genome = int(read_count / number_of_genomes)
+    with Experiment(number_of_genomes, genome_directory) as exp:
+        for fasta in os.listdir(exp.genome_dir()):
+            full_path = os.path.join(exp.genome_dir(), fasta)
+            genome, name = parse_fasta(full_path)
+            simulate_reads(genome=genome, name=name, read_count=read_count_per_genome, outfile=outfile, readlength=readlength, error_rate=error_rate)
+
+
+class SubparserNames(Enum):
+    single_genome = "single_genome"
+    multi_genome = "multi_genome"
+
+def parseArgs(argv=None) -> argparse.Namespace:
+    """
+    This method takes in the arguments from the command and performs
+    parsing.
+    INPUT: 
+        Array of input arguments
+    OUTPUT:
+        returns a argparse.Namespace object
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(
+        help='Choose type of simulation', dest='sub_parser')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-v", "--verbose", action="store_true")
+
+    # if single_genome
+    single_genome = subparsers.add_parser(
+        SubparserNames.single_genome.value)
+    single_genome.add_argument(
+        "-g", "--genome_path", type=Path, help="Path to the genome (fasta)", required=True)
+    single_genome.add_argument(
+        "-c", "--read_count", type=int, help="Number of total reads to simulate.", required=True)
+    single_genome.add_argument(
+        "-o", "--output_file", type=Path, help="path to output file (fasta; single ended)", required=True)
+    single_genome.add_argument(
+        "-l", "--read_length", default=100, nargs='?', type=int, help="size of the read length [Default: 100]", required=False)
+    single_genome.add_argument(
+        "-e", "--error", default=0.01, nargs='?', type=float, help="Average error rate per base. [Default: 0.01]", required=False)
+
+    # if multi_genome
+    multi_genome = subparsers.add_parser(
+        SubparserNames.multi_genome.value)
+    multi_genome.add_argument(
+        "-g", "--genome_path", type=Path, help="Path to the genome directory (fasta)", required=True)
+    multi_genome.add_argument(
+        "-c", "--read_count", type=int, help="Number of total reads to simulate.", required=True)
+    multi_genome.add_argument(
+        "-o", "--output_file", type=Path, help="path to output file (fasta; single ended)", required=True)
+    multi_genome.add_argument(
+        "-n", "--number_of_genomes", type=int, help="number of genomes to use.", required=True)
+    multi_genome.add_argument(
+        "-l", "--read_length", default=100, nargs='?', type=int, help="size of the read length [Default: 100]", required=False)
+    multi_genome.add_argument(
+        "-e", "--error", default=0.01, nargs='?', type=float, help="Average error rate per base. [Default: 0.01]", required=False)
+
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    # parse arguments
-    genome, name = parse_fasta(sys.argv[1])
-    read_count = int(sys.argv[2])
-    outfile = sys.argv[3]
-    read_length = int(sys.argv[4])
-    error_rate = float(sys.argv[5])
-    # simulate reads
-    simulate_reads(genome, name, read_count, outfile, readlength=read_length, error_rate=error_rate)
+    # arguments
+    args = parseArgs(sys.argv[1:])
+
+    # run simulation type specified
+    if (args.sub_parser == SubparserNames.single_genome.value):
+        print(f"Performing single genome simulation...")
+        # simulate reads - single genome.
+        genome, name = parse_fasta(args.genome_path)
+        simulate_reads(genome=genome, name=name, read_count=args.read_count, outfile=args.output_file, readlength=args.read_length, error_rate=args.error)
+
+    elif (args.sub_parser == SubparserNames.multi_genome.value):
+        print(f"Performing multi genome simulation...")
+        # simulate reads - multiple genomes.
+        multi_simulate(genome_directory=args.genome_path, number_of_genomes=args.number_of_genomes, read_count=args.read_count, outfile=args.output_file, readlength=args.read_length, error_rate=args.error)
+
+    else:
+        print(__doc__)
