@@ -1,10 +1,14 @@
 """
 Benchmarking module for PhageFilter.
 
-Install:
+Install / Dependencies:
     1. Yaml - https://pyyaml.org/wiki/PyYAMLDocumentation
     2. Kraken2 - https://github.com/DerrickWood/kraken2/wiki
-    3. make sure to build on release mode before running
+    3. FastViromeExplorer - https://code.vt.edu/saima5/FastViromeExplorer
+        3.A - install - javac -d bin src/*.java
+        3.B - get SamTools - https://fastviromeexplorer.readthedocs.io/en/latest/
+        3.C - get Kallisto - https://fastviromeexplorer.readthedocs.io/en/latest/
+    4. For PhageFilter, make sure to build on release mode before running
 
 Examples:
 * running genome count benchmarking
@@ -125,8 +129,8 @@ def get_true_maps(fasta_read_path: Path) -> Dict[str,  int]:
         line = read_file.readline()
         count = 0
         while line:
-            if line[0] == ">":
-                name = "_".join(line.strip(">").strip("\n").split("_")[0:-1])
+            if line[0] == "@":
+                name = "_".join(line.strip("@").strip("\n").split("_")[0:-1])
                 if name in name2counts:
                     name2counts[name] += 1
                 else:
@@ -141,6 +145,7 @@ def get_classification_metrics(true_map, out_map):
     of the classification accuracy.
     """
     TP, FP, FN = (0, 0, 0)
+    recall, precision = 0, 0
     for genome in out_map.keys():
         if genome in true_map.keys():
             TP += 1
@@ -150,8 +155,10 @@ def get_classification_metrics(true_map, out_map):
         if genome not in out_map.keys():
             FN += 1
     # get recall and precision
-    recall = TP / (TP + FN)
-    precision = TP / (TP + FP)
+    if  (TP + FN) != 0:
+        recall = TP / (TP + FN)
+    if (TP + FP) != 0:
+        precision = TP / (TP + FP)
     return recall, precision
 
 def get_readcount_metrics(true_map, out_map):
@@ -227,7 +234,11 @@ class PhageFilter(ToolOp):
                 name, count = line.strip("\n").split(",")
                 name2counts[name] = int(count)
                 line = out_file.readline()
-        return name2counts
+
+        # filter based on read count threshold
+        total_reads_classified = sum(name2counts.values())
+        cuttoff = 0.01
+        return {k:v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
 
     def build(self, db_path: Path, genomes_path: Path):
         """
@@ -304,7 +315,7 @@ class Kraken2(ToolOp):
                 line = out_file.readline()
         return name2counts
 
-    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 7):
+    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 0):
         """
         run tool, based on input arguments, it outputs a CMD-line array.
         """
@@ -391,6 +402,141 @@ class Kraken2(ToolOp):
                             ncbi2tax[ncbi] = [taxid]
                     line = f.readline()
         return ncbi2tax
+    
+class FastViromeExplorer(ToolOp):
+
+    def __init__(self, tool_path, list_file_path, kmer_size: int = 31):
+        """_summary_
+
+        Args:
+            kmer_size (int): _description_
+            filter_thresh (float): _description_
+            threads (int, optional): _description_. Defaults to 4.
+        """
+        self.k = kmer_size
+        self.tool_path = tool_path
+        self.list_file_path = list_file_path
+        self.db_path = None
+
+    def parse_output(self, output_path: Path, genomes_path: Path) -> Dict[str, int]:
+        """_summary_
+        parses an output file/directory (depends on tool)
+        returns a dictionary of the output of PhageFilter.
+
+        Args:
+            output_path (Path): Path where the output of PhageFilter
+                                will be stored.
+
+        Returns:
+            Dict[str, int]: A map from NCBI ID to read count
+        """
+        name2counts = {}
+        with open(os.path.join(output_path, "FastViromeExplorer-final-sorted-abundance.tsv")) as out_file:
+            line = out_file.readline()
+            line = out_file.readline()
+            count = 0
+            while line:
+                ncbi_id =  line.strip("\n").split("\t")[0]
+                count =  float(line.strip("\n").split("\t")[3])
+                if count > 0:
+                    name2counts[ncbi_id] = count
+                line = out_file.readline()
+        return name2counts
+
+    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 7):
+        """
+        run tool, based on input arguments, it outputs a CMD-line array.
+        """
+        ref_db_path = "tmp_delete.fa"
+
+        # create fasta for making DB
+        self.create_ref_db(genomes_path, ref_db_path=ref_db_path, list_file_path=self.list_file_path)
+        build_cmd = ["kallisto", "index", "-k", f"{self.k}", "-i", f"{db_path}", f"{ref_db_path}"]
+
+        # delete tempfile.
+        # os.remove(ref_db_path)
+
+        # update attributes.
+        self.db_path = db_path
+
+        return [build_cmd]
+    
+    def create_ref_db(self, genomes_path: Path, ref_db_path: Path, list_file_path: Path, fasta_line_len = 80):
+        """_summary_
+
+        Args:
+            genomes_path (Path): _description_
+        """
+        ref_db = open(ref_db_path, "w+")
+        list_file = open(list_file_path, "w+")
+        for genome in os.listdir(genomes_path):
+            genome_path = os.path.join(genomes_path, genome)
+            # parse fasta.
+            genome_seq, length, ncbi_id = self.parse_fasta(genome_path)
+            # save information to list file.
+            list_file.write(f"{ncbi_id}\tN/A\tN/A\t{length}\n")
+            # save genome to file.
+            ref_db.write(f">{ncbi_id} {length}\n")
+            for genome_index in range(0, length, fasta_line_len):
+                ref_db.write(genome_seq[genome_index:genome_index+fasta_line_len] + "\n")
+
+    def parse_fasta(self, fasta_file: Path):
+        """_summary_
+
+        Args:
+            fasta_file (Path): _description_
+        """
+        genome_seq = ""
+        with open(fasta_file, "r") as fasta_file:
+            line = fasta_file.readline()
+            while line:
+                if line.startswith(">"):
+                    ncbi_id = line.strip(">").strip("\n").split(" ")[0]
+                else:
+                    genome_seq += line.strip("\n")
+                line = fasta_file.readline()
+        return genome_seq, len(genome_seq), ncbi_id
+
+
+
+    def run(self, fasta_file: Path, output_path: Path):
+        """_summary_
+        run tool, based on input arguments, it outputs a CMD-line array.
+
+        Args:
+            fasta_file (Path): Path to simualted reads.
+            output_path (Path): Desired path for the output file.
+
+        Returns:
+            N/A.
+
+        Notes:
+            Usage:
+            java -cp bin FastViromeExplorer -1 $read1File -2 $read2File -i $indexFile -o $outputDirectory
+            -1: input .fastq file for read sequences (paired-end 1), mandatory field.
+            -2: input .fastq file for read sequences (paired-end 2).
+            -i: kallisto index file, mandatory field.
+            -db: reference database file in fasta/fa format.
+            -o: output directory. Default option is the project directory.
+            -l: virus list containing all viruses present in the reference database along with their length.
+            -cr: the value of ratio criteria, default: 0.3.
+            -co: the value of coverage criteria, default: 0.1.
+            -cn: the value of number of reads criteria, default: 10.
+            -salmon: use salmon instead of kallisto, default: false. To use salmon pass '-salmon true' as parameter.
+            -reportRatio: default: false. To get ratio pass '-reportRatio true' as parameter.
+        """
+        if not self.db_path or not self.list_file_path:
+            print("Must first build (FastViromeExplorer)")
+            exit()
+        run_cmd = ["java", "-cp", f"{self.tool_path}bin", f"FastViromeExplorer"]
+        run_cmd += ["-i", f"{self.db_path}"] 
+        run_cmd += ["-l", f"{self.list_file_path}"]
+        run_cmd += ["-1", f"{fasta_file}"]
+        run_cmd += ["-o", f"{output_path}"]
+        run_cmd += ["-cn", "1"] 
+        run_cmd += ["-co", "0.00001"]
+        run_cmd += ["-reportRatio", "true"]
+        return [run_cmd]
 
 class BenchmarkingTests:
     """_summary_
@@ -448,18 +594,23 @@ class BenchmarkingTests:
         """
         # perform a parameterization for kmer_size and theta.
         result_file = open(result_csv, "w+")
-        result_file.write("kmer size, theta, time, memory, recall, precision, read count error\n")
-        for kmer_size in [10, 15, 20, 25]:
+        result_file.write("kmer size, theta, error rate, number of genomes, read count, time, memory, recall, precision, avg read count error\n")
+        for kmer_size in [15, 20, 25, 30, 35, 40, 45, 50]:
             # build a tree for each kmer_size
             phagefilter.k = kmer_size  # update kmer_size
             pf_build_cmd = phagefilter.build(phagefilter_db, genome_path)
             run_command(pf_build_cmd)
             # test tree on kmer size for different thresholds.
-            for theta in [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]:
+            for theta in [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.1, 0.2, 0.0]:
                 for test_file in os.listdir(test_directory):
                     test_file_path = os.path.join(test_directory, test_file)
                     output_file = f"phagefilter_{kmer_size}_{theta}_{test_file}.csv"
-                    # update theta.
+                    # parse output file (NOTE: will fail if simulated reads file name does not contain values below in name)
+                    print(test_file)
+                    error_rate = float(test_file.strip(".fq").split("_")[-1].strip("e"))
+                    number_of_genomes = int(test_file.strip(".fq").split("_")[-2].strip("n"))
+                    number_of_reads = int(test_file.strip(".fq").split("_")[-3].strip("c"))
+                    # # update theta.
                     phagefilter.theta = theta
                     # query
                     pf_run_cmd = phagefilter.run(test_file_path, output_file)
@@ -471,7 +622,7 @@ class BenchmarkingTests:
                     read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
                     # save to file
                     result_file.write(
-                        f"{kmer_size}, {theta}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
+                        f"{kmer_size}, {theta}, {error_rate}, {number_of_genomes}, {number_of_reads}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
         # close result file
         result_file.close()
 
@@ -492,7 +643,8 @@ class BenchmarkingTests:
         # create tool instances
         kraken2 = Kraken2(kmer_size=configuration["Kraken2"]["kmer_size"])
         phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
-        tools = {"Kraken2": kraken2, "PhageFilter": phagefilter}
+        fve = FastViromeExplorer(tool_path=configuration["FastViromeExplorer"]["tool_path"], kmer_size=configuration["FastViromeExplorer"]["kmer_size"], list_file_path=configuration["FastViromeExplorer"]["list_file_path"])
+        tools = {"FastViromeExplorer": fve, "Kraken2": kraken2, "PhageFilter": phagefilter} 
         
         # build DBs, if not exists
         for toolname, tool in tools.items():
