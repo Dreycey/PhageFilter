@@ -3,21 +3,15 @@ Description:
     This script is used to generate exact substrings of
     a given genome (in fasta format).
 
-For more information, see
+For more information, see:
     python3 benchmarking/scripts/simulate_reads.py -h
 
 Usage:
-    python benchmarking/simulate_reads.py <fasta genome path> <number of reads/substrings> <output file> <read length>
-
+    python3 benchmarking/scripts/simulate_reads.py single_genome -g <genome path - fasta> --c <number of total reads> -l <read length> -n <number of genomes> -e <error rate> -o <outfile name>
+    python3 benchmarking/scripts/simulate_reads.py multi_genome -g <genome directory> -c <number of total reads> -l <read length> -n <number of genomes> -e <error rate> -o <outfile prefix>
 Example:
-    python benchmarking/scripts/simulate_reads.py examples/genomes/viral_genome_dir/GCF_000912255.1_ViralProj226726_genomic.fna 1000 simulated_reads.fa 100 0.2
-
-For many genomes:
-```bash
-    for genome in examples/genomes/viral_genome_dir/*; \
-    do python benchmarking/simulate_reads.py $file 1000 \
-    simulated_reads.fa 1000; done
-```
+    python3 benchmarking/scripts/simulate_reads.py single_genome -g examples/genomes/viral_genome_dir/ -c 100 -o sim_reads.fq -l 100 -e 0.1
+    python3 benchmarking/scripts/simulate_reads.py single_genome -g examples/genomes/viral_genome_dir/GCF_000912115.1_ViralProj219123_genomic.fna -c 100 -o sim_reads.fq -l 100 -e 0.1
 """
 import os
 import sys
@@ -95,7 +89,8 @@ def simulate_reads(genome, name, read_count, outfile, readlength=100, error_rate
                     #base2change = random.randint(0, len(read)-1)
                     read[base2change] = random.choice(["A", "C", "T", "G"])
             read = "".join(read)
-            out.write(f">{name}_{reads_added}\n{read}\n")
+            quality = ''.join(["#"]*len(read))
+            out.write(f"@{name}_{reads_added}\n{read}\n+\n{quality}\n")
             reads_added += 1
 
 def multi_simulate(genome_directory, number_of_genomes, read_count, outfile, readlength=100, error_rate=0.0):
@@ -103,7 +98,7 @@ def multi_simulate(genome_directory, number_of_genomes, read_count, outfile, rea
     Simulates reads for multiple genomes.
     """
     print(genome_directory, number_of_genomes, read_count, outfile, readlength, error_rate)
-
+    outfile = Path(str(outfile) + f"_c{read_count}_n{number_of_genomes}_e{error_rate}.fq")
     # create subset of sampled genomes, and simulate reads from each.
     read_count_per_genome = int(read_count / number_of_genomes)
     with Experiment(number_of_genomes, genome_directory) as exp:
