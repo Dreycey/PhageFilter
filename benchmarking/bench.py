@@ -90,10 +90,17 @@ class Experiment:
 
 
 def run_command(arguments: List) -> BenchmarkResult:
-    """
+    """_summary_
     run a subcommand from the command line.
     returns the running time and memory, along with the output
     path.
+
+    Args:
+        arguments (List): A nested list of commands to run. Must be nested since some input arguments
+                          may have multiple commands.
+
+    Returns:
+        BenchmarkResult: a dataclass containing timing and memory information.
     """
     start_time = time.monotonic_ns()
     for command in arguments:
@@ -139,10 +146,17 @@ def get_true_maps(fasta_read_path: Path) -> Dict[str,  int]:
     return name2counts
 
 
-def get_classification_metrics(true_map, out_map):
-    """
+def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> Tuple[float, float]:
+    """_summary_
     uses true map and PhageFilter map to obtain metrics
     of the classification accuracy.
+
+    Args:
+        true_map (Dict[str, int]): a map of the true genomes and read counts.
+        out_map (Dict[str, int]): a map of a tools predicted genomes and read counts.
+
+    Returns:
+        Tuple[float, float]: An output of recall and precision
     """
     TP, FP, FN = (0, 0, 0)
     recall, precision = 0, 0
@@ -161,10 +175,21 @@ def get_classification_metrics(true_map, out_map):
         precision = TP / (TP + FP)
     return recall, precision
 
-def get_readcount_metrics(true_map, out_map):
-    """
-    uses true map and PhageFilter map to obtain metrics
-    of the read count error.
+
+def get_readcount_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> List[int]:
+    """_summary_
+    Method for determining the absolute diffrence in true read
+    counts and a tools predicted read counts. This is important
+    for understanding incorrectly mapped reads in addition to 
+    being able to accurately predict abundances.
+
+    Args:
+        true_map (Dict[str, int]): a map of the true genomes and read counts.
+        out_map (Dict[str, int]): a map of a tools predicted genomes and read counts.
+
+    Returns:
+        int (List[int]): A list of absolute differences between true and predicted
+                         read counts for genomes correctly predicted.
     """
     absolute_difference = []
     for genome, count in out_map.items():
@@ -240,9 +265,16 @@ class PhageFilter(ToolOp):
         cuttoff = 0.01
         return {k:v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
 
-    def build(self, db_path: Path, genomes_path: Path):
-        """
-        run tool, based on input arguments, it outputs a CMD-line array.
+    def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
+        """_summary_
+        Build the tools database.
+
+        Args:
+            db_path (Path): path to the database the tool needs.
+            genomes_path (Path): path to the genomes the db will use for building.
+
+        Returns:
+            List[List[str]]: a nested list of command line arguments.
         """
         build_cmd = ["./target/release/phage_filter", "build"]
         build_cmd += ["--genomes", f"{genomes_path}"]
@@ -316,8 +348,17 @@ class Kraken2(ToolOp):
         return name2counts
 
     def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 7):
-        """
-        run tool, based on input arguments, it outputs a CMD-line array.
+        """_summary_
+        Build the tools database.
+
+        Args:
+            db_path (Path): path to the database the tool needs.
+            genomes_path (Path): path to the genomes the db will use for building.
+            minimizer_len (int, optional): length for the Kraken minimizer. Defaults to 31.
+            minimizer_spacing (int, optional): allows for errors in the kmers being mapped. Defaults to 7.
+
+        Returns:
+            List[List[str]]: a nested list of command line arguments.
         """
         build_cmds = []
         # get map from NCBI ID to taxid
@@ -359,7 +400,7 @@ class Kraken2(ToolOp):
 
         return build_cmds
 
-    def run(self, fasta_file: Path, output_path: Path):
+    def run(self, fasta_file: Path, output_path: Path) -> List[List[str]]:
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 
@@ -368,12 +409,12 @@ class Kraken2(ToolOp):
             output_path (Path): Desired path for the output file.
 
         Returns:
-            N/A.
+            List[List[str]]: a nested list of command line arguments.
         """
         if not self.db_path:
             print("Must first build (Kraken2)")
             exit()
-        run_cmd = ["kraken2", "--db", f"{self.db_path}", f"{fasta_file}", "--report", f"{output_path}"] #"--output", f"{output_path}"
+        run_cmd = ["kraken2", "--db", f"{self.db_path}", f"{fasta_file}", "--report", f"{output_path}"] 
         return [run_cmd]
 
     @staticmethod
@@ -402,7 +443,8 @@ class Kraken2(ToolOp):
                             ncbi2tax[ncbi] = [taxid]
                     line = f.readline()
         return ncbi2tax
-    
+
+
 class FastViromeExplorer(ToolOp):
 
     def __init__(self, tool_path, list_file_path, kmer_size: int = 31):
@@ -443,9 +485,16 @@ class FastViromeExplorer(ToolOp):
                 line = out_file.readline()
         return name2counts
 
-    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 7):
-        """
-        run tool, based on input arguments, it outputs a CMD-line array.
+    def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
+        """_summary_
+        Build the tools database.
+
+        Args:
+            db_path (Path): path to the database the tool needs.
+            genomes_path (Path): path to the genomes the db will use for building.
+
+        Returns:
+            List[List[str]]: a nested list of command line arguments.
         """
         ref_db_path = "tmp_delete.fa"
 
@@ -497,9 +546,7 @@ class FastViromeExplorer(ToolOp):
                 line = fasta_file.readline()
         return genome_seq, len(genome_seq), ncbi_id
 
-
-
-    def run(self, fasta_file: Path, output_path: Path):
+    def run(self, fasta_file: Path, output_path: Path) -> List[List[str]]:
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 
@@ -508,7 +555,7 @@ class FastViromeExplorer(ToolOp):
             output_path (Path): Desired path for the output file.
 
         Returns:
-            N/A.
+            List[List[str]]: a nested list of command line arguments.
 
         Notes:
             Usage:
@@ -537,6 +584,7 @@ class FastViromeExplorer(ToolOp):
         run_cmd += ["-co", "0.00001"]
         run_cmd += ["-reportRatio", "true"]
         return [run_cmd]
+
 
 class BenchmarkingTests:
     """_summary_
@@ -672,6 +720,7 @@ class BenchmarkingTests:
                     read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
                     # save to file
                     result_file.write(f"{tool_name}, {test_name}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
+
 
 class SubparserNames(Enum):
     parameterization = "parameterization"
