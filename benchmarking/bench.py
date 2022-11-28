@@ -315,7 +315,7 @@ class Kraken2(ToolOp):
                 line = out_file.readline()
         return name2counts
 
-    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 0):
+    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 7):
         """
         run tool, based on input arguments, it outputs a CMD-line array.
         """
@@ -661,7 +661,7 @@ class BenchmarkingTests:
             for test_file in os.listdir(test_directory):
                 test_file_path = os.path.join(test_directory, test_file)
                 truth_map = get_true_maps(test_file_path)
-                test_name = test_file.strip('.fna')
+                test_name = test_file.strip('.fq')
                 for tool_name, tool in tools.items():
                     output_path = f"{tool_name}_{test_name}"
                     run_cmd = tool.run(test_file_path, output_path)
