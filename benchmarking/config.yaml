@@ -1,9 +1,14 @@
 PhageFilter:
   database_name: "tree_3"
-  kmer_size: 15
-  theta: 0.2
+  kmer_size: 45
+  theta: 0.6
 Kraken2:
   database_name: "krakenDB/"
   kmer_size: 35
   minimizer_len: 31
-  minimizer_spacing: 7
+  minimizer_spacing: 0
+FastViromeExplorer:
+  database_name: "fve_db.idx"
+  kmer_size: 31
+  tool_path: "FastViromeExplorer/"
+  list_file_path: "ncbi-viruses-list.txt"
