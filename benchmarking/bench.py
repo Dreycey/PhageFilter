@@ -42,6 +42,7 @@ from dataclasses import dataclass
 import argparse
 import yaml
 import numpy as np
+from multiprocessing import Pool
 
 GENOME_SUBDIR = "genome/"
 
@@ -92,6 +93,24 @@ class Experiment:
 def run_command(arguments: List) -> BenchmarkResult:
     """_summary_
     run a subcommand from the command line.
+    returns the running time and memory, along with the output
+    path.
+    Each subcommand is wrapped in a new process to ensure memory is properly measured.
+
+    Args:
+        arguments (List): A nested list of commands to run. Must be nested since some input arguments
+                          may have multiple commands.
+
+    Returns:
+        BenchmarkResult: a dataclass containing timing and memory information.
+    """
+    # Run each experiment in a different process so we only measure the max memory usage for that process
+    with Pool(1) as pool:
+        return pool.apply(_run_command, (arguments,))
+
+def _run_command(arguments: List) -> BenchmarkResult:
+    """_summary_
+    Actually runs a subcommand from the command line.
     returns the running time and memory, along with the output
     path.
 
