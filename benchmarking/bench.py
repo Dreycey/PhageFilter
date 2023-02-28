@@ -624,7 +624,7 @@ class BenchmarkingTests:
     """
 
     @staticmethod
-    def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count=10):
+    def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
         """_summary_
         Performs benchmarking of PhageFilter to obtain an estimate on the impact on time and memory usage
         of having N genomes in the database.
@@ -634,6 +634,9 @@ class BenchmarkingTests:
             genome_path (Path): Path to the genome directory
             phagefilter_db (Path): Path to the DB for benchmarking (will rewrite for each combination)
             result_csv (Path): Path to desired output file.
+            variation_count (int): Essentially equivalent to step size for the number of genomes tested per buildtime benchmark. 
+                                   We want to test intervals between 10 and N genomes for built time, where the number 
+                                   between 10 and N is given by variation count.
         """
         # segment the number of genomes checked so that 10 variations (or 'variation_count') are tested.
         number_of_genomes = len(os.listdir(genome_path))
