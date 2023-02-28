@@ -91,7 +91,6 @@ def simulate_reads(genome, name, read_count, outfile, readlength=100, error_rate
             read = list(genome[start:stop])
             for base2change in range(0, len(read)):
                 if random.uniform(0, 1) < error_rate:
-                    #base2change = random.randint(0, len(read)-1)
                     read[base2change] = random.choice(["A", "C", "T", "G"])
             read = "".join(read)
             quality = ''.join(["#"]*len(read))
