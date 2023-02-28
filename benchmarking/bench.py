@@ -284,7 +284,11 @@ class PhageFilter(ToolOp):
 
         # filter based on read count threshold
         total_reads_classified = sum(name2counts.values())
-        return {k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
+        # filtering based on different read count thresholds for testing.
+        filtered_name2counts = {
+            k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
+
+        return filtered_name2counts
 
     def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
         """_summary_
