@@ -697,7 +697,7 @@ class BenchmarkingTests:
                         ".fq").split("_")[-2].strip("n"))
                     number_of_reads = int(test_file.strip(
                         ".fq").split("_")[-3].strip("c"))
-                    # # update theta.
+                    # update theta.
                     phagefilter.theta = theta
                     # query
                     pf_run_cmd = phagefilter.run(test_file_path, output_file)
