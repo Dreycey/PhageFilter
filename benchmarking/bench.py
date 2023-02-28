@@ -59,6 +59,7 @@ class BenchmarkResult:
     # Memory in bytes?
     max_memory: int
 
+
 class Experiment:
     def __init__(self, num_genomes: int, source_genomes_dir: Path):
         # Keep track of the seed for reproducability
@@ -107,6 +108,7 @@ def run_command(arguments: List) -> BenchmarkResult:
     # Run each experiment in a different process so we only measure the max memory usage for that process
     with Pool(1) as pool:
         return pool.apply(_run_command, (arguments,))
+
 
 def _run_command(arguments: List) -> BenchmarkResult:
     """_summary_
@@ -188,7 +190,7 @@ def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]
         if genome not in out_map.keys():
             FN += 1
     # get recall and precision
-    if  (TP + FN) != 0:
+    if (TP + FN) != 0:
         recall = TP / (TP + FN)
     if (TP + FP) != 0:
         precision = TP / (TP + FP)
@@ -215,6 +217,7 @@ def get_readcount_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> 
         if genome in true_map.keys():
             absolute_difference.append(abs(count - true_map[genome]))
     return absolute_difference
+
 
 class ToolOp(ABC):
     """
@@ -258,7 +261,7 @@ class PhageFilter(ToolOp):
         self.threads = threads
         self.db_path = None
 
-    def parse_output(self, output_path: Path, genomes_path: Path=None) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path = None, cuttoff=0.01) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.
@@ -281,8 +284,7 @@ class PhageFilter(ToolOp):
 
         # filter based on read count threshold
         total_reads_classified = sum(name2counts.values())
-        cuttoff = 0.01
-        return {k:v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
+        return {k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
 
     def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
         """_summary_
@@ -387,21 +389,24 @@ class Kraken2(ToolOp):
         build_cmds.append(["mkdir", "-p", f"{db_path}/taxonomy/"])
 
         # download NCBI taxonomy
-        taxdump_ftp='https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.zip'
+        taxdump_ftp = 'https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.zip'
         if not os.path.exists("new_taxdump.zip"):
             build_cmds.append(["wget", f"{taxdump_ftp}"])
-        build_cmds.append(["unzip", "new_taxdump.zip", "-d", f"{db_path}taxonomy/"])
+        build_cmds.append(["unzip", "new_taxdump.zip",
+                          "-d", f"{db_path}taxonomy/"])
 
         # download NCBI accession2taxid
-        nucl_wgs_ftp='https://ftp.ncbi.nih.gov/pub/taxonomy/accession2taxid/nucl_gb.accession2taxid.gz'
+        nucl_wgs_ftp = 'https://ftp.ncbi.nih.gov/pub/taxonomy/accession2taxid/nucl_gb.accession2taxid.gz'
         if not os.path.exists("nucl_gb.accession2taxid.gz"):
             build_cmds.append(["wget", f"{nucl_wgs_ftp}"])
         build_cmds.append(["gzip", "-d", "-k", "nucl_gb.accession2taxid.gz"])
-        build_cmds.append(["mv", "nucl_gb.accession2taxid", f"{db_path}taxonomy/nucl_gb.accession2taxid"])
+        build_cmds.append(["mv", "nucl_gb.accession2taxid",
+                          f"{db_path}taxonomy/nucl_gb.accession2taxid"])
 
         # add genomic files
         for genome in os.listdir(genomes_path):
-            build_cmd = ["kraken2-build", "--add-to-library", f"{genomes_path / Path(genome)}"]
+            build_cmd = ["kraken2-build", "--add-to-library",
+                         f"{genomes_path / Path(genome)}"]
             build_cmd += ["--db", f"{db_path}"]
             build_cmds.append(build_cmd)
 
@@ -433,7 +438,8 @@ class Kraken2(ToolOp):
         if not self.db_path:
             print("Must first build (Kraken2)")
             exit()
-        run_cmd = ["kraken2", "--db", f"{self.db_path}", f"{fasta_file}", "--report", f"{output_path}"] 
+        run_cmd = ["kraken2", "--db", f"{self.db_path}",
+                   f"{fasta_file}", "--report", f"{output_path}"]
         return [run_cmd]
 
     @staticmethod
@@ -441,7 +447,7 @@ class Kraken2(ToolOp):
         """_summary_
         This function is used for mapping taxonomy IDs to NCBI accessions. This is useful when
         comparing the output of Kraken2 to PhageFilter.
-        
+
         Args:
             genomes_path (Path): Path to the directory of genomes used to build the Kraken2 DB
 
@@ -454,8 +460,10 @@ class Kraken2(ToolOp):
                 line = f.readline()
                 while line:
                     if line.startswith(">"):
-                        ncbi = line.strip(">").strip("\n").split("|kraken:taxid|")[1].strip()
-                        taxid = line.strip(">").strip("\n").split(" ")[0].strip()
+                        ncbi = line.strip(">").strip("\n").split(
+                            "|kraken:taxid|")[1].strip()
+                        taxid = line.strip(">").strip(
+                            "\n").split(" ")[0].strip()
                         if ncbi in ncbi2tax:
                             ncbi2tax[ncbi].append(taxid)
                         else:
@@ -497,8 +505,8 @@ class FastViromeExplorer(ToolOp):
             line = out_file.readline()
             count = 0
             while line:
-                ncbi_id =  line.strip("\n").split("\t")[0]
-                count =  float(line.strip("\n").split("\t")[3])
+                ncbi_id = line.strip("\n").split("\t")[0]
+                count = float(line.strip("\n").split("\t")[3])
                 if count > 0:
                     name2counts[ncbi_id] = count
                 line = out_file.readline()
@@ -518,8 +526,10 @@ class FastViromeExplorer(ToolOp):
         ref_db_path = "tmp_delete.fa"
 
         # create fasta for making DB
-        self.create_ref_db(genomes_path, ref_db_path=ref_db_path, list_file_path=self.list_file_path)
-        build_cmd = ["kallisto", "index", "-k", f"{self.k}", "-i", f"{db_path}", f"{ref_db_path}"]
+        self.create_ref_db(genomes_path, ref_db_path=ref_db_path,
+                           list_file_path=self.list_file_path)
+        build_cmd = ["kallisto", "index", "-k",
+                     f"{self.k}", "-i", f"{db_path}", f"{ref_db_path}"]
 
         # delete tempfile.
         # os.remove(ref_db_path)
@@ -528,8 +538,8 @@ class FastViromeExplorer(ToolOp):
         self.db_path = db_path
 
         return [build_cmd]
-    
-    def create_ref_db(self, genomes_path: Path, ref_db_path: Path, list_file_path: Path, fasta_line_len = 80):
+
+    def create_ref_db(self, genomes_path: Path, ref_db_path: Path, list_file_path: Path, fasta_line_len=80):
         """_summary_
 
         Args:
@@ -546,7 +556,8 @@ class FastViromeExplorer(ToolOp):
             # save genome to file.
             ref_db.write(f">{ncbi_id} {length}\n")
             for genome_index in range(0, length, fasta_line_len):
-                ref_db.write(genome_seq[genome_index:genome_index+fasta_line_len] + "\n")
+                ref_db.write(
+                    genome_seq[genome_index:genome_index+fasta_line_len] + "\n")
 
     def parse_fasta(self, fasta_file: Path):
         """_summary_
@@ -594,12 +605,13 @@ class FastViromeExplorer(ToolOp):
         if not self.db_path or not self.list_file_path:
             print("Must first build (FastViromeExplorer)")
             exit()
-        run_cmd = ["java", "-cp", f"{self.tool_path}bin", f"FastViromeExplorer"]
-        run_cmd += ["-i", f"{self.db_path}"] 
+        run_cmd = ["java", "-cp",
+                   f"{self.tool_path}bin", f"FastViromeExplorer"]
+        run_cmd += ["-i", f"{self.db_path}"]
         run_cmd += ["-l", f"{self.list_file_path}"]
         run_cmd += ["-1", f"{fasta_file}"]
         run_cmd += ["-o", f"{output_path}"]
-        run_cmd += ["-cn", "1"] 
+        run_cmd += ["-cn", "1"]
         run_cmd += ["-co", "0.00001"]
         run_cmd += ["-reportRatio", "true"]
         return [run_cmd]
@@ -661,7 +673,8 @@ class BenchmarkingTests:
         """
         # perform a parameterization for kmer_size and theta.
         result_file = open(result_csv, "w+")
-        result_file.write("kmer size, theta, error rate, number of genomes, read count, time, memory, recall, precision, avg read count error\n")
+        result_file.write(
+            "kmer size, theta, error rate, number of genomes, read count, time, memory, recall, precision, avg read count error\n")
         for kmer_size in [15, 20, 25, 30, 35, 40, 45, 50]:
             # build a tree for each kmer_size
             phagefilter.k = kmer_size  # update kmer_size
@@ -674,9 +687,12 @@ class BenchmarkingTests:
                     output_file = f"phagefilter_{kmer_size}_{theta}_{test_file}.csv"
                     # parse output file (NOTE: will fail if simulated reads file name does not contain values below in name)
                     print(test_file)
-                    error_rate = float(test_file.strip(".fq").split("_")[-1].strip("e"))
-                    number_of_genomes = int(test_file.strip(".fq").split("_")[-2].strip("n"))
-                    number_of_reads = int(test_file.strip(".fq").split("_")[-3].strip("c"))
+                    error_rate = float(test_file.strip(
+                        ".fq").split("_")[-1].strip("e"))
+                    number_of_genomes = int(test_file.strip(
+                        ".fq").split("_")[-2].strip("n"))
+                    number_of_reads = int(test_file.strip(
+                        ".fq").split("_")[-3].strip("c"))
                     # # update theta.
                     phagefilter.theta = theta
                     # query
@@ -685,8 +701,10 @@ class BenchmarkingTests:
                     # benchmark
                     truth_map = get_true_maps(test_file_path)
                     result_map = phagefilter.parse_output(output_file)
-                    recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
-                    read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
+                    recall, precision = get_classification_metrics(
+                        true_map=truth_map, out_map=result_map)
+                    read_count_error = get_readcount_metrics(
+                        true_map=truth_map, out_map=result_map)
                     # save to file
                     result_file.write(
                         f"{kmer_size}, {theta}, {error_rate}, {number_of_genomes}, {number_of_reads}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
@@ -705,26 +723,32 @@ class BenchmarkingTests:
             result_csv (Path): Path to desired output file.
             test_directory (Path): Path to directory of test reads (Fasta/Fastq)
         """
-        configuration = yaml.load(open(f"{config}", "r"), Loader=yaml.SafeLoader)
+        configuration = yaml.load(
+            open(f"{config}", "r"), Loader=yaml.SafeLoader)
 
         # create tool instances
         kraken2 = Kraken2(kmer_size=configuration["Kraken2"]["kmer_size"])
-        phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
-        fve = FastViromeExplorer(tool_path=configuration["FastViromeExplorer"]["tool_path"], kmer_size=configuration["FastViromeExplorer"]["kmer_size"], list_file_path=configuration["FastViromeExplorer"]["list_file_path"])
-        tools = {"FastViromeExplorer": fve, "Kraken2": kraken2, "PhageFilter": phagefilter} 
-        
+        phagefilter = PhageFilter(
+            kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
+        fve = FastViromeExplorer(tool_path=configuration["FastViromeExplorer"]["tool_path"], kmer_size=configuration[
+                                 "FastViromeExplorer"]["kmer_size"], list_file_path=configuration["FastViromeExplorer"]["list_file_path"])
+        tools = {"FastViromeExplorer": fve,
+                 "Kraken2": kraken2, "PhageFilter": phagefilter}
+
         # build DBs, if not exists
         for toolname, tool in tools.items():
             tool_DB = configuration[toolname]["database_name"]
             if not os.path.exists(tool_DB):
                 tool_build_cmd = tool.build(tool_DB, genome_path)
-                tool_build_result: BenchmarkResult = run_command(tool_build_cmd)
+                tool_build_result: BenchmarkResult = run_command(
+                    tool_build_cmd)
             else:
                 tool.db_path = tool_DB
 
         # benchmark on test files.
         with open(result_csv, "w+") as result_file:
-            result_file.write("tool name, test name, time, memory, recall, precision, read count error\n")
+            result_file.write(
+                "tool name, test name, time, memory, recall, precision, read count error\n")
             for test_file in os.listdir(test_directory):
                 test_file_path = os.path.join(test_directory, test_file)
                 truth_map = get_true_maps(test_file_path)
@@ -734,11 +758,15 @@ class BenchmarkingTests:
                     run_cmd = tool.run(test_file_path, output_path)
                     run_result: BenchmarkResult = run_command(run_cmd)
                     # benchmark
-                    result_map = tool.parse_output(output_path, genomes_path=genome_path)
-                    recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
-                    read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
+                    result_map = tool.parse_output(
+                        output_path, genomes_path=genome_path)
+                    recall, precision = get_classification_metrics(
+                        true_map=truth_map, out_map=result_map)
+                    read_count_error = get_readcount_metrics(
+                        true_map=truth_map, out_map=result_map)
                     # save to file
-                    result_file.write(f"{tool_name}, {test_name}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
+                    result_file.write(
+                        f"{tool_name}, {test_name}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
 
 
 class SubparserNames(Enum):
