@@ -679,7 +679,7 @@ class BenchmarkingTests:
         result_file = open(result_csv, "w+")
         result_file.write(
             "kmer size, theta, error rate, number of genomes, read count, time, memory, recall, precision, avg read count error\n")
-        for kmer_size in [15, 20, 25, 30, 35, 40, 45, 50]:
+        for kmer_size in range(15, 51, 5):
             # build a tree for each kmer_size
             phagefilter.k = kmer_size  # update kmer_size
             pf_build_cmd = phagefilter.build(phagefilter_db, genome_path)
