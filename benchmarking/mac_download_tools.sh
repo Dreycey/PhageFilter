@@ -23,4 +23,5 @@ cd ../;
 # https://conda.io/projects/conda/en/latest/user-guide/install/macos.html
 conda install -c bioconda kraken2;
 
+# May want to use `mamba create -n phage -c bioconda -c conda-forge kraken2 python`
 
