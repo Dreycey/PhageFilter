@@ -535,9 +535,6 @@ class FastViromeExplorer(ToolOp):
         build_cmd = ["kallisto", "index", "-k",
                      f"{self.k}", "-i", f"{db_path}", f"{ref_db_path}"]
 
-        # delete tempfile.
-        # os.remove(ref_db_path)
-
         # update attributes.
         self.db_path = db_path
 
