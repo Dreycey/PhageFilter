@@ -685,7 +685,7 @@ class BenchmarkingTests:
             pf_build_cmd = phagefilter.build(phagefilter_db, genome_path)
             run_command(pf_build_cmd)
             # test tree on kmer size for different thresholds.
-            for theta in [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.1, 0.2, 0.0]:
+            for theta in range(0.0, 1.01, 0.2):
                 for test_file in os.listdir(test_directory):
                     test_file_path = os.path.join(test_directory, test_file)
                     output_file = f"phagefilter_{kmer_size}_{theta}_{test_file}.csv"
