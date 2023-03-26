@@ -47,7 +47,7 @@ enum Commands {
         /// Path to output file. (CSV)
         #[arg(required = true, short, long)]
         out: String,
-        /// Path to store the tree to disk.
+        /// Path of the tree stored to disk.
         #[arg(required = true, short, long)]
         db_path: String,
         /// Number of threads to use for read matching
