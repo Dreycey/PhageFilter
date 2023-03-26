@@ -271,7 +271,7 @@ impl BloomTree<HashSeed, HashSeed> {
         // serialize the tree
         let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
         let serialized_tree = bincode::serialize(self).unwrap();
-        tree_file.write(&serialized_tree).unwrap();
+        tree_file.write_all(&serialized_tree).unwrap();
     }
 
     /// This method loads a serialized tree from disk into memory.
