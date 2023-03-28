@@ -11,6 +11,7 @@ use bio::io::fasta;
 use bio::io::fastq;
 use std::fs;
 use std::fs::metadata;
+use std::path::Path;
 
 #[derive(Clone, Debug)]
 pub enum RecordTypes {
@@ -125,27 +126,28 @@ pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
     let md = metadata(genomes_path).unwrap();
     let mut records_arr: Vec<RecordTypes> = vec![];
     if md.is_dir() {
+        // get files matching the extensions.
         let paths = fs::read_dir(genomes_path).unwrap().filter(|p| match p {
             Ok(s) => match s.path().extension() {
-                Some(ext) => {
-                    // Only use paths that have a supported extension
-                    supported_extensions.contains(&ext.to_str().unwrap())
-                }
+                Some(ext) => supported_extensions.contains(&ext.to_str().unwrap()),
                 None => false,
             },
-            // Propagate errors
             _ => true,
         });
+        // use paths to parse files.
         for path in paths {
             let mut tmp_arr: Vec<RecordTypes> =
                 parse_genome_file(&path.unwrap().path().to_str().unwrap().to_string());
             records_arr.append(&mut tmp_arr);
         }
+        // if records are empty thereafter.
         if records_arr.len() == 0 {
             panic!("Could not load any genomes. May not have any files with a supported extension in the provided directory.");
         }
+
         return records_arr;
     } else {
+        // if it's a file then parse the single file.
         return parse_genome_file(genomes_path);
     }
 }
@@ -167,18 +169,15 @@ pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
 /// - N/A
 fn parse_genome_file(genomes_file_path: &String) -> Vec<RecordTypes> {
     log::debug!("Parsing file: {}", genomes_file_path);
-    if genomes_file_path.ends_with(".fa")
-        || genomes_file_path.ends_with(".fasta")
-        || genomes_file_path.ends_with(".fna")
+    match Path::new(genomes_file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
     {
-        return fasta_parser(&genomes_file_path);
-    } else if genomes_file_path.ends_with(".fq") || genomes_file_path.ends_with(".fastq") {
-        return fastq_parser(&genomes_file_path);
-    } else {
-        panic!("Incorrect file path: {}", genomes_file_path);
+        Some("fa") | Some("fasta") | Some("fna") => fasta_parser(&genomes_file_path),
+        Some("fq") | Some("fastq") => fastq_parser(&genomes_file_path),
+        _ => panic!("Incorrect file path: {}", genomes_file_path),
     }
 }
-
 /// This method parses a fasta file.
 ///
 /// # Notes
