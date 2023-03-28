@@ -15,6 +15,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 const TREE_FILENAME: &'static str = "tree.bin";
@@ -238,9 +239,9 @@ impl BloomTree<HashSeed, HashSeed> {
             directory.canonicalize().unwrap().to_str().unwrap()
         );
         // serialize the tree
-        let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
-        let serialized_tree = bincode::serialize(self).unwrap();
-        tree_file.write_all(&serialized_tree).unwrap();
+        let mut tree_file = BufWriter::new(File::create(directory.join(TREE_FILENAME)).unwrap());
+        bincode::serialize_into(&mut tree_file, self).unwrap();
+        tree_file.flush().unwrap();
     }
 
     /// This method loads a serialized tree from disk into memory.
@@ -265,8 +266,10 @@ impl BloomTree<HashSeed, HashSeed> {
         );
         // serialized bloom tree path
         let tree_file: File = File::open(directory.join(TREE_FILENAME)).unwrap();
-        // serialize the tree
-        let deserialized_tree: BloomTree = bincode::deserialize_from(tree_file).unwrap();
+        // create a buffered reader for the file
+        let tree_reader = BufReader::new(tree_file);
+        // deserialize the tree from the buffered reader
+        let deserialized_tree: BloomTree = bincode::deserialize_from(tree_reader).unwrap();
 
         return deserialized_tree;
     }
