@@ -313,9 +313,9 @@ impl BloomNode {
 /// Panics if the `kmer_size` is greater than the genome size.
 pub(crate) fn create_bloom_tree(
     parsed_genomes: Vec<file_parser::RecordTypes>,
-    kmer_size: usize,
+    kmer_size: &usize,
 ) -> BloomTree {
-    let mut bloom_tree = BloomTree::new(kmer_size);
+    let mut bloom_tree = BloomTree::new(*kmer_size);
 
     for genome in parsed_genomes {
         bloom_tree = bloom_tree.insert(&genome);

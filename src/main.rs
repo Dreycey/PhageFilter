@@ -91,7 +91,7 @@ fn main() {
             let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&genomes);
             print!("Building the SBT... \n");
             // build: bloom tree
-            let bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, *kmer_size);
+            let bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, kmer_size);
             // save tree to disk
             let save_dir = Path::new(db_path);
             bloom_node.save(save_dir);
