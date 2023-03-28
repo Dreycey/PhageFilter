@@ -104,14 +104,10 @@ impl Debug for BloomFilter<HashSeed, HashSeed> {
 }
 
 impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
-    /// Calculates the distance between two
-    /// bloom filters using the hamming_distance.
+    /// Calculates the distance between two bloom filters using the hamming_distance.
     fn distance(&self, other: &BloomFilter) -> usize {
-        let mut diff_1 = self.bits.clone();
-        diff_1 ^= &other.bits;
-        // // The Hamming Distance is the number of bits that differ between the two bitvecs.
-        let hamming_distance: usize = diff_1.count_ones();
-        return hamming_distance;
+        let diff = self.bits.clone() ^ &other.bits;
+        diff.count_ones()
     }
 }
 
