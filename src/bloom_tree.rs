@@ -72,7 +72,7 @@ impl PartialEq for BloomNode {
 impl BloomTree<HashSeed, HashSeed> {
     /// Construct a new BloomTree
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `kmer_size`: The kmer size the tree will use for both building and queries.
     ///
     /// # Returns
@@ -89,7 +89,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// A wrapper function to add either create a root node,
     /// or add a new genome to the tree.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `genome`: a reference to the genome (file_parser::RecordTypes)
     ///
     /// # Returns
@@ -116,7 +116,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// a new BloomNode with the generated bloom filter for the
     /// genomes kmers.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `genome`: a reference to the genome (file_parser::RecordTypes)
     ///
     /// # Returns
@@ -143,7 +143,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// Returns an internal node, given two nodes containing
     /// genomes (i.e. to-be leaf nodes).
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `current_node`: BloomNode representating a leaf node already in the tree.
     /// - `new_node`: The BloomNode being added to the tree.
     /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
@@ -179,7 +179,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// If it's a leaf, then it create a new internal node, with the children being the new node
     /// and the current node.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `current_node`: The current BloomNode being evaluated (used recursively).
     /// - `node`: The BloomNode being added to the tree.
     /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
@@ -218,11 +218,8 @@ impl BloomTree<HashSeed, HashSeed> {
 
     /// This method saves the tree to disk using a given directory name.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `directory`: Directory name where the serialized tree will be stored.
-    ///
-    /// # Returns
-    /// - N/A
     ///
     /// # Panics
     /// - if the directory does not exist.
@@ -246,11 +243,8 @@ impl BloomTree<HashSeed, HashSeed> {
 
     /// This method loads a serialized tree from disk into memory.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `directory`: Directory name where the serialized tree is located.
-    ///
-    /// # Returns
-    /// - N/A
     ///
     /// # Panics
     /// - if the directory does not exist.
@@ -276,14 +270,16 @@ impl BloomTree<HashSeed, HashSeed> {
 }
 
 impl BloomNode {
-    /// Returns an instance of a BloomNode.
+    /// Creates a new instance of `BloomNode`.
     ///
-    /// # Parameters
-    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
-    /// - `tax_id`: The taxonimic identifier for the genome, or the NCBI accession.
+    /// # Arguments
+    ///
+    /// * `hash_states` - The randomized hash states made using `bloom_filter::hasher::HashSeed`.
+    /// * `tax_id` - The taxonomic identifier for the genome, or the NCBI accession.
     ///
     /// # Returns
-    /// - a bool of whether the node is a leaf node.
+    ///
+    /// A new instance of `BloomNode`.
     fn new(hash_states: (HashSeed, HashSeed), tax_id: Option<String>) -> Self {
         BloomNode {
             // initializes random hash state to use for the whole tree
@@ -295,43 +291,37 @@ impl BloomNode {
         }
     }
 
-    /// Returns bool indicating whether the node is
-    /// a leaf node.
-    ///
-    /// # Parameters
-    /// - N/A
+    /// Returns a boolean indicating whether the node is a leaf node.
     ///
     /// # Returns
-    /// - a bool of whether the node is a leaf node.
+    ///
+    /// `true` if the node is a leaf node; `false` otherwise.
     pub(crate) fn is_leafnode(&self) -> bool {
         return self.left_child.is_none() && self.right_child.is_none();
     }
 }
 
-/// Given a vector of genomes (as type file_parser::RecordTypes),
-/// this method returns a `BloomTree`.
+/// Builds a Bloom tree from a vector of genomes.
 ///
-/// # Parameters
-/// - `parsed_genomes`: A vector of genomes, of the type file_parser::RecordTypes
-/// - `kmer_size`: The kmer size for building the tree.
+/// # Arguments
 ///
-/// # Returns
-/// - a bloom tree containing the genomes, of the type BloomTree
+/// * `parsed_genomes` - A vector of genomes, represented as `file_parser::RecordTypes`.
+/// * `kmer_size` - The kmer size used for building the tree.
 ///
 /// # Panics
-/// - if kmer_size is great than genome size.
+///
+/// Panics if the `kmer_size` is greater than the genome size.
 pub(crate) fn create_bloom_tree(
     parsed_genomes: Vec<file_parser::RecordTypes>,
-    kmer_size: &usize,
+    kmer_size: usize,
 ) -> BloomTree {
-    // create initial bloom tree
-    let mut bloom_tree = BloomTree::new(*kmer_size);
-    // add genomes to bloom tree
+    let mut bloom_tree = BloomTree::new(kmer_size);
+
     for genome in parsed_genomes {
         bloom_tree = bloom_tree.insert(&genome);
     }
 
-    return bloom_tree;
+    bloom_tree
 }
 
 #[cfg(test)]
