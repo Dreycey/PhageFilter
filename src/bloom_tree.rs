@@ -15,6 +15,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 const TREE_FILENAME: &'static str = "tree.bin";
@@ -71,7 +72,7 @@ impl PartialEq for BloomNode {
 impl BloomTree<HashSeed, HashSeed> {
     /// Construct a new BloomTree
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `kmer_size`: The kmer size the tree will use for both building and queries.
     ///
     /// # Returns
@@ -88,7 +89,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// A wrapper function to add either create a root node,
     /// or add a new genome to the tree.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `genome`: a reference to the genome (file_parser::RecordTypes)
     ///
     /// # Returns
@@ -115,7 +116,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// a new BloomNode with the generated bloom filter for the
     /// genomes kmers.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `genome`: a reference to the genome (file_parser::RecordTypes)
     ///
     /// # Returns
@@ -142,7 +143,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// Returns an internal node, given two nodes containing
     /// genomes (i.e. to-be leaf nodes).
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `current_node`: BloomNode representating a leaf node already in the tree.
     /// - `new_node`: The BloomNode being added to the tree.
     /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
@@ -154,25 +155,18 @@ impl BloomTree<HashSeed, HashSeed> {
         new_node: Box<BloomNode>,
         hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
-        // get random number for internal node
+        // create a new internal node.
         let mut rng = rand::thread_rng();
         let n2: u16 = rng.gen();
-        // create internal node ID using random number generator
-        let mut node_name = "Internal Node".to_string();
-        node_name = format!("{}_{}", node_name, n2.to_string());
-        // Create new node.
-        let mut node: Box<BloomNode> =
-            Box::new(BloomNode::new(hash_states.clone(), Some(node_name)));
+        let node_name = "Internal Node".to_string() + "_" + &n2.to_string();
+        let mut node = Box::new(BloomNode::new(hash_states.clone(), Some(node_name)));
 
         // Combine children's bloom filters
         node.bloom_filter.union(&current_node.bloom_filter);
         node.bloom_filter.union(&new_node.bloom_filter);
-
-        // assigns left child to current node, and new node to right child.
         node.left_child = Some(current_node);
         node.right_child = Some(new_node);
-
-        return node;
+        node
     }
 
     /// Adds a BloomNode to a given BloomTree.
@@ -185,7 +179,7 @@ impl BloomTree<HashSeed, HashSeed> {
     /// If it's a leaf, then it create a new internal node, with the children being the new node
     /// and the current node.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `current_node`: The current BloomNode being evaluated (used recursively).
     /// - `node`: The BloomNode being added to the tree.
     /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
@@ -197,62 +191,35 @@ impl BloomTree<HashSeed, HashSeed> {
         node: Box<BloomNode>,
         hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
-        log::debug!(
-            "(bloom tree; add_to_tree()) Looking at current node: {:?}",
-            current_node.tax_id
-        );
-        // if left or right child of current node is empty, add node.
-        match (&current_node.left_child, &current_node.right_child) {
-            (None, Some(_)) => {
-                // Update future ancestor to include this bloom filter
-                current_node.bloom_filter.union(&node.bloom_filter);
-
-                current_node.left_child = Some(node);
+        if let (Some(left), Some(right)) = (&current_node.left_child, &current_node.right_child) {
+            current_node.bloom_filter.union(&node.bloom_filter);
+            let right_distance = right.bloom_filter.distance(&node.bloom_filter);
+            let left_distance = left.bloom_filter.distance(&node.bloom_filter);
+            if right_distance < left_distance {
+                current_node.right_child = Some(Self::add_to_tree(
+                    current_node.right_child.unwrap(),
+                    node,
+                    hash_states,
+                ));
+            } else {
+                current_node.left_child = Some(Self::add_to_tree(
+                    current_node.left_child.unwrap(),
+                    node,
+                    hash_states,
+                ));
             }
-            (Some(_), None) => {
-                // Update future ancestor to include this bloom filter
-                current_node.bloom_filter.union(&node.bloom_filter);
-
-                current_node.right_child = Some(node);
-            }
-            (Some(left), Some(right)) => {
-                // Update future ancestor to include this bloom filter
-                current_node.bloom_filter.union(&node.bloom_filter);
-
-                // choose the closest child node - checks hamming distance for each child.
-                let right_distance = right.bloom_filter.distance(&node.bloom_filter);
-                let left_distance = left.bloom_filter.distance(&node.bloom_filter);
-                // Add to the subtree with the closest distance so we can minimize false-positives in the bloom filters.
-                if right_distance < left_distance {
-                    current_node.right_child = Some(BloomTree::add_to_tree(
-                        current_node.right_child.unwrap(),
-                        node,
-                        hash_states,
-                    ));
-                } else {
-                    current_node.left_child = Some(BloomTree::add_to_tree(
-                        current_node.left_child.unwrap(),
-                        node,
-                        hash_states,
-                    ));
-                }
-            }
-            // Currently at leaf node, need to merge.
-            (None, None) => {
-                // Create new 'unioned' internal node
-                current_node = BloomTree::init_internal_node(current_node, node, hash_states);
-            }
+        } else if current_node.left_child.is_none() && current_node.right_child.is_none() {
+            current_node = Self::init_internal_node(current_node, node, hash_states);
+        } else {
+            panic!("Node with only one child encountered - should not happen.");
         }
-        return current_node;
+        current_node
     }
 
     /// This method saves the tree to disk using a given directory name.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `directory`: Directory name where the serialized tree will be stored.
-    ///
-    /// # Returns
-    /// - N/A
     ///
     /// # Panics
     /// - if the directory does not exist.
@@ -269,18 +236,15 @@ impl BloomTree<HashSeed, HashSeed> {
             directory.canonicalize().unwrap().to_str().unwrap()
         );
         // serialize the tree
-        let mut tree_file = File::create(directory.join(TREE_FILENAME)).unwrap();
-        let serialized_tree = bincode::serialize(self).unwrap();
-        tree_file.write_all(&serialized_tree).unwrap();
+        let mut tree_file = BufWriter::new(File::create(directory.join(TREE_FILENAME)).unwrap());
+        bincode::serialize_into(&mut tree_file, self).unwrap();
+        tree_file.flush().unwrap();
     }
 
     /// This method loads a serialized tree from disk into memory.
     ///
-    /// # Parameters
+    /// # Arguments
     /// - `directory`: Directory name where the serialized tree is located.
-    ///
-    /// # Returns
-    /// - N/A
     ///
     /// # Panics
     /// - if the directory does not exist.
@@ -296,22 +260,26 @@ impl BloomTree<HashSeed, HashSeed> {
         );
         // serialized bloom tree path
         let tree_file: File = File::open(directory.join(TREE_FILENAME)).unwrap();
-        // serialize the tree
-        let deserialized_tree: BloomTree = bincode::deserialize_from(tree_file).unwrap();
+        // create a buffered reader for the file
+        let tree_reader = BufReader::new(tree_file);
+        // deserialize the tree from the buffered reader
+        let deserialized_tree: BloomTree = bincode::deserialize_from(tree_reader).unwrap();
 
         return deserialized_tree;
     }
 }
 
 impl BloomNode {
-    /// Returns an instance of a BloomNode.
+    /// Creates a new instance of `BloomNode`.
     ///
-    /// # Parameters
-    /// - `hash_states`: randomized hash states made using bloom_filter::hasher::HashSeed
-    /// - `tax_id`: The taxonimic identifier for the genome, or the NCBI accession.
+    /// # Arguments
+    ///
+    /// * `hash_states` - The randomized hash states made using `bloom_filter::hasher::HashSeed`.
+    /// * `tax_id` - The taxonomic identifier for the genome, or the NCBI accession.
     ///
     /// # Returns
-    /// - a bool of whether the node is a leaf node.
+    ///
+    /// A new instance of `BloomNode`.
     fn new(hash_states: (HashSeed, HashSeed), tax_id: Option<String>) -> Self {
         BloomNode {
             // initializes random hash state to use for the whole tree
@@ -323,43 +291,37 @@ impl BloomNode {
         }
     }
 
-    /// Returns bool indicating whether the node is
-    /// a leaf node.
-    ///
-    /// # Parameters
-    /// - N/A
+    /// Returns a boolean indicating whether the node is a leaf node.
     ///
     /// # Returns
-    /// - a bool of whether the node is a leaf node.
+    ///
+    /// `true` if the node is a leaf node; `false` otherwise.
     pub(crate) fn is_leafnode(&self) -> bool {
         return self.left_child.is_none() && self.right_child.is_none();
     }
 }
 
-/// Given a vector of genomes (as type file_parser::RecordTypes),
-/// this method returns a `BloomTree`.
+/// Builds a Bloom tree from a vector of genomes.
 ///
-/// # Parameters
-/// - `parsed_genomes`: A vector of genomes, of the type file_parser::RecordTypes
-/// - `kmer_size`: The kmer size for building the tree.
+/// # Arguments
 ///
-/// # Returns
-/// - a bloom tree containing the genomes, of the type BloomTree
+/// * `parsed_genomes` - A vector of genomes, represented as `file_parser::RecordTypes`.
+/// * `kmer_size` - The kmer size used for building the tree.
 ///
 /// # Panics
-/// - if kmer_size is great than genome size.
+///
+/// Panics if the `kmer_size` is greater than the genome size.
 pub(crate) fn create_bloom_tree(
     parsed_genomes: Vec<file_parser::RecordTypes>,
     kmer_size: &usize,
 ) -> BloomTree {
-    // create initial bloom tree
     let mut bloom_tree = BloomTree::new(*kmer_size);
-    // add genomes to bloom tree
+
     for genome in parsed_genomes {
         bloom_tree = bloom_tree.insert(&genome);
     }
 
-    return bloom_tree;
+    bloom_tree
 }
 
 #[cfg(test)]
