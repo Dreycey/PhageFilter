@@ -154,25 +154,18 @@ impl BloomTree<HashSeed, HashSeed> {
         new_node: Box<BloomNode>,
         hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
-        // get random number for internal node
+        // create a new internal node.
         let mut rng = rand::thread_rng();
         let n2: u16 = rng.gen();
-        // create internal node ID using random number generator
-        let mut node_name = "Internal Node".to_string();
-        node_name = format!("{}_{}", node_name, n2.to_string());
-        // Create new node.
-        let mut node: Box<BloomNode> =
-            Box::new(BloomNode::new(hash_states.clone(), Some(node_name)));
+        let node_name = "Internal Node".to_string() + "_" + &n2.to_string();
+        let mut node = Box::new(BloomNode::new(hash_states.clone(), Some(node_name)));
 
         // Combine children's bloom filters
         node.bloom_filter.union(&current_node.bloom_filter);
         node.bloom_filter.union(&new_node.bloom_filter);
-
-        // assigns left child to current node, and new node to right child.
         node.left_child = Some(current_node);
         node.right_child = Some(new_node);
-
-        return node;
+        node
     }
 
     /// Adds a BloomNode to a given BloomTree.
@@ -197,53 +190,29 @@ impl BloomTree<HashSeed, HashSeed> {
         node: Box<BloomNode>,
         hash_states: &(HashSeed, HashSeed),
     ) -> Box<BloomNode> {
-        log::debug!(
-            "(bloom tree; add_to_tree()) Looking at current node: {:?}",
-            current_node.tax_id
-        );
-        // if left or right child of current node is empty, add node.
-        match (&current_node.left_child, &current_node.right_child) {
-            (None, Some(_)) => {
-                // Update future ancestor to include this bloom filter
-                current_node.bloom_filter.union(&node.bloom_filter);
-
-                current_node.left_child = Some(node);
+        if let (Some(left), Some(right)) = (&current_node.left_child, &current_node.right_child) {
+            current_node.bloom_filter.union(&node.bloom_filter);
+            let right_distance = right.bloom_filter.distance(&node.bloom_filter);
+            let left_distance = left.bloom_filter.distance(&node.bloom_filter);
+            if right_distance < left_distance {
+                current_node.right_child = Some(Self::add_to_tree(
+                    current_node.right_child.unwrap(),
+                    node,
+                    hash_states,
+                ));
+            } else {
+                current_node.left_child = Some(Self::add_to_tree(
+                    current_node.left_child.unwrap(),
+                    node,
+                    hash_states,
+                ));
             }
-            (Some(_), None) => {
-                // Update future ancestor to include this bloom filter
-                current_node.bloom_filter.union(&node.bloom_filter);
-
-                current_node.right_child = Some(node);
-            }
-            (Some(left), Some(right)) => {
-                // Update future ancestor to include this bloom filter
-                current_node.bloom_filter.union(&node.bloom_filter);
-
-                // choose the closest child node - checks hamming distance for each child.
-                let right_distance = right.bloom_filter.distance(&node.bloom_filter);
-                let left_distance = left.bloom_filter.distance(&node.bloom_filter);
-                // Add to the subtree with the closest distance so we can minimize false-positives in the bloom filters.
-                if right_distance < left_distance {
-                    current_node.right_child = Some(BloomTree::add_to_tree(
-                        current_node.right_child.unwrap(),
-                        node,
-                        hash_states,
-                    ));
-                } else {
-                    current_node.left_child = Some(BloomTree::add_to_tree(
-                        current_node.left_child.unwrap(),
-                        node,
-                        hash_states,
-                    ));
-                }
-            }
-            // Currently at leaf node, need to merge.
-            (None, None) => {
-                // Create new 'unioned' internal node
-                current_node = BloomTree::init_internal_node(current_node, node, hash_states);
-            }
+        } else if current_node.left_child.is_none() && current_node.right_child.is_none() {
+            current_node = Self::init_internal_node(current_node, node, hash_states);
+        } else {
+            panic!("Node with only one child encountered - should not happen.");
         }
-        return current_node;
+        current_node
     }
 
     /// This method saves the tree to disk using a given directory name.
