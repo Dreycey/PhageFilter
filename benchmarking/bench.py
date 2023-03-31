@@ -76,37 +76,39 @@ def parseArgs(argv=None) -> argparse.Namespace:
 
 def main():
 
-    # arguments
-    args = parseArgs(sys.argv[1:])
-
-    # run benchmark type specified
-    if (args.sub_parser == SubparserNames.parameterization.value):
+    def parameterization_action():
         print(f"Performing parameterization benchmarking...")
-        # create tool interfaces
         phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
-
-        # run test
         bench_test.benchtest_parameter_sweep(
             phagefilter, args.test_directory, args.database_name, args.genome_dir, args.result_csv)
 
-    elif (args.sub_parser == SubparserNames.genomecount.value):
+    def genomecount_action():
         print(f"Performing genome count benchmarking...")
-        # create tool interfaces
         phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
-
-        # run test
         bench_test.benchtest_genomecount(phagefilter, args.genome_dir,
                                                 args.database_name, args.result_csv)
 
-    elif (args.sub_parser == SubparserNames.relative_performance.value):
+    def relative_performance_action():
         print(f"Performing relative performance benchmarking...")
-        # run test
         bench_test.benchtest_relative_performance(
             args.genome_dir, args.config, args.result_csv, args.test_directory)
 
+    # arguments
+    args = parseArgs(sys.argv[1:])
+
+    # map subparsers to their corresponding functions and messages
+    actions = {
+        SubparserNames.parameterization.value: parameterization_action,
+        SubparserNames.genomecount.value: genomecount_action,
+        SubparserNames.relative_performance.value: relative_performance_action
+    }
+
+    # run benchmark type specified
+    action = actions.get(args.sub_parser)
+    if action:
+        action()
     else:
         print(__doc__)
-
 
 if __name__ == '__main__':
     main()

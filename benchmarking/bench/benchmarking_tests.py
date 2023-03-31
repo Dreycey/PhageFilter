@@ -1,7 +1,6 @@
 """
 Description:
-    This module contains functions for benchmarking the performance of PhageFilter, a tool for identifying
-    phage sequences in metagenomic data. The three functions included are:
+    This module contains functions for benchmarking the performance of PhageFilter. The three functions included are:
 
 1. benchtest_genomecount:
     - Performs benchmarking of PhageFilter to obtain an estimate on the impact on time and memory usage of 
