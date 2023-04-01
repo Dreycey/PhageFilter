@@ -8,7 +8,7 @@ This directory contains the benchmarking pipeline used for benchmarking the Memo
 
 ### Benchmarking
 
-1. performance benchmarking (when optimizing performance..)
+#### 1. performance benchmarking (when optimizing performance..)
 
 ```
 python benchmarking/bench.py performance_testing -g examples/genomes/viral_genome_dir/ -r res_performance_benchmarking_O0.csv
