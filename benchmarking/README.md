@@ -32,7 +32,7 @@ python benchmarking/bench.py parameterization -g examples/genomes/viral_genome_d
 python benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -r res_relative_performance.csv -t examples/test_reads/ -c benchmarking/config.yaml
 ```
 
-### Simulating Reads
+### Simulating reads (really genome subfragments - not _true read_ simulation)
 
 1. Single genome simulation.
 
