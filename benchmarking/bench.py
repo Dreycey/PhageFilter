@@ -13,7 +13,7 @@ Install / Dependencies:
 Examples:
 * performance benchmarking (when optimizing performance..)
 ```
-python benchmarking/bench.py performance_testing -g examples/genomes/viral_genome_dir/ -r res_relative_performance.csv -t examples/test_reads_performance/
+python benchmarking/bench.py performance_testing -g examples/genomes/viral_genome_dir/ -r res_performance_benchmarking_O0.csv
 ```
 
 * running genome count benchmarking
@@ -64,7 +64,6 @@ def parseArgs(argv=None) -> argparse.Namespace:
 
     # if performance testing
     performance_testing_parser = subparsers.add_parser(SubparserNames.performance_testing.value)
-    performance_testing_parser.add_argument("-t", "--test_directory", type=Path, help="path to the directory with simulated test reads.", required=True)
     add_common_arguments(performance_testing_parser)
 
     # if parameterization
@@ -91,7 +90,7 @@ def main():
         print(f"Performing parameterization benchmarking...")
         phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
         bench_test.benchtest_performance_testing(
-            phagefilter=phagefilter, test_directory=args.test_directory, phagefilter_db=args.database_name, genome_path=args.genome_dir, result_csv=args.result_csv)
+            phagefilter=phagefilter, phagefilter_db=args.database_name, genome_path=args.genome_dir, result_csv=args.result_csv)
         
     def parameterization_action():
         print(f"Performing parameterization benchmarking...")

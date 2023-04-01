@@ -25,11 +25,11 @@ import numpy as np
 # custom libraries
 from bench.utils import BenchmarkResult, Experiment, run_command, get_classification_metrics, get_readcount_metrics, get_true_maps
 from bench.tools import PhageFilter, Kraken2, FastViromeExplorer
+from bench.simulate_reads import multi_simulate
 
 
 
-
-def benchtest_performance_testing(phagefilter: PhageFilter, test_directory: Path, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
+def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 5):
     """_summary_
     Performs benchmarking of PhageFilter, testing time and memory consumption for the build process and query process.
     For the query process, differing number of reads and DB sizes will tested in combination.
@@ -53,14 +53,18 @@ def benchtest_performance_testing(phagefilter: PhageFilter, test_directory: Path
         # benchmark impact of number of genomes on build.
         genomecount2Result: Dict[int, BenchmarkResult] = {}
         for genome_count in range(step_size, number_of_genomes, step_size):
-            with Experiment(genome_count, genome_path) as exp:
+            with Experiment(genome_count, genome_path) as genome_exp:
                 # run tool on tmp build directory
-                pf_build_cmd = phagefilter.build(phagefilter_db, exp.genome_dir())
+                genome_dir = Path(genome_exp.genome_dir())
+                pf_build_cmd = phagefilter.build(phagefilter_db, genome_dir)
                 genomecount2Result[genome_count] = run_command(pf_build_cmd)
-                for test_file in os.listdir(test_directory):
-                    test_file_path = os.path.join(test_directory, test_file)
+                print(f"before: {genome_dir}")
+                for read_count in [100, 1000, 10000, 100000]:
+                    test_file_path = multi_simulate(genome_dir, step_size, read_count, "simreads")
                     truth_map = get_true_maps(test_file_path)
-                    test_name = test_file.strip('.fq')
+                    print(f"\n{truth_map}\n")
+                    print(len(os.listdir(genome_dir)))
+                    test_name = str(test_file_path).strip('.fq')
                     output_path = f"PhageFilter_{test_name}"
                     run_cmd = phagefilter.run(test_file_path, output_path)
                     run_result: BenchmarkResult = run_command(run_cmd)
@@ -75,6 +79,8 @@ def benchtest_performance_testing(phagefilter: PhageFilter, test_directory: Path
                     read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
                     # save to file
                     output_file.write(f"{genome_count}, {number_of_reads}, {genomecount2Result[genome_count].elapsed_time}, {genomecount2Result[genome_count].max_memory}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
+                    # remove tmp fasta file
+                    os.remove(test_file_path)
 
 def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
     """_summary_

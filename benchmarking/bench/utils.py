@@ -31,10 +31,11 @@ from dataclasses import dataclass
 
 
 
-GENOME_SUBDIR = "genome/"
-
 class Experiment:
-    def __init__(self, num_genomes: int, source_genomes_dir: Path):
+    def __init__(self, num_genomes: int, source_genomes_dir: Path, tmp_name = "genome/"):
+        # save tmp name
+        self.tmp_name = tmp_name
+
         # Keep track of the seed for reproducability
         self.seed = random.randint(0, sys.maxsize)
         random.seed(self.seed)
@@ -46,7 +47,7 @@ class Experiment:
 
         # make genome subdirectory before copying into it
         os.mkdir(self.genome_dir())
-        
+
         # copy genome files
         [shutil.copy2(file, self.genome_dir()) for file in selected_genomes]
 
@@ -60,7 +61,7 @@ class Experiment:
         os.rmdir(self.tmp_dir)
 
     def genome_dir(self) -> str:
-        return os.path.join(self.tmp_dir, GENOME_SUBDIR)
+        return os.path.join(self.tmp_dir, self.tmp_name)
     
 @dataclass
 class BenchmarkResult:
@@ -141,6 +142,23 @@ def get_true_maps(fasta_read_path: Path) -> Dict[str,  int]:
 
     return name2counts
 
+def parse_fasta(file_name):
+    """
+    fasta to genome string.
+    """
+    print(f"Reading fasta file: {file_name}")
+    genome = ""
+    with open(file_name) as f:
+        line = f.readline()
+        count = 0
+        while line:
+            if count > 0:
+                genome += line.strip("\n")
+            else:
+                name = line.strip(">").strip("\n").split(" ")[0]
+            line = f.readline()
+            count += 1
+    return genome, name
 
 def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> Tuple[float, float]:
     """_summary_

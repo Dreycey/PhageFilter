@@ -89,13 +89,13 @@ class PhageFilter(ToolOp):
                 name2counts[name] = int(count)
                 line = out_file.readline()
 
-        # filter based on read count threshold
-        total_reads_classified = sum(name2counts.values())
-        # TODO: filtering based on different read count thresholds for testing.
-        filtered_name2counts = {
-            k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
+        # # filter based on read count threshold
+        # total_reads_classified = sum(name2counts.values())
+        # # # TODO: filtering based on different read count thresholds for testing.
+        # # filtered_name2counts = {
+        # #     k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
 
-        return filtered_name2counts
+        return name2counts
 
     def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
         """_summary_
