@@ -18,6 +18,7 @@ Description:
 import os
 from typing import List, Tuple, Dict
 from pathlib import Path
+import re
 # third party libraries
 import yaml
 import numpy as np
@@ -28,6 +29,52 @@ from bench.tools import PhageFilter, Kraken2, FastViromeExplorer
 
 
 
+def benchtest_performance_testing(phagefilter: PhageFilter, test_directory: Path, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
+    """_summary_
+    Performs benchmarking of PhageFilter, testing time and memory consumption for the build process and query process.
+    For the query process, differing number of reads and DB sizes will tested in combination.
+
+    Args:
+        phagefilter (PhageFilter): instance of PhageFilter
+        genome_path (Path): Path to the genome directory
+        phagefilter_db (Path): Path to the DB for benchmarking (will rewrite for each combination)
+        result_csv (Path): Path to desired output file.
+        variation_count (int): Essentially equivalent to step size for the number of genomes tested per buildtime benchmark. 
+                                We want to test intervals between 10 and N genomes for built time, where the number 
+                                between 10 and N is given by variation count.
+    """
+    # segment the number of genomes checked so that 10 variations (or 'variation_count') are tested.
+    number_of_genomes = len(os.listdir(genome_path))
+    step_size = int(number_of_genomes/variation_count)+1
+
+    # open the output file and write the header
+    with open(result_csv, "w+") as output_file:
+        output_file.write(f"genome count, number of reads, build time (ns), build mem (bytes), query time (ns), query memory (bytes), recall, precision, avg. read count error\n")
+        # benchmark impact of number of genomes on build.
+        genomecount2Result: Dict[int, BenchmarkResult] = {}
+        for genome_count in range(step_size, number_of_genomes, step_size):
+            with Experiment(genome_count, genome_path) as exp:
+                # run tool on tmp build directory
+                pf_build_cmd = phagefilter.build(phagefilter_db, exp.genome_dir())
+                genomecount2Result[genome_count] = run_command(pf_build_cmd)
+                for test_file in os.listdir(test_directory):
+                    test_file_path = os.path.join(test_directory, test_file)
+                    truth_map = get_true_maps(test_file_path)
+                    test_name = test_file.strip('.fq')
+                    output_path = f"PhageFilter_{test_name}"
+                    run_cmd = phagefilter.run(test_file_path, output_path)
+                    run_result: BenchmarkResult = run_command(run_cmd)
+                    match = re.search(r'_c(\d+)_', test_name)
+                    if match:
+                        number_of_reads = int(match.group(1))
+                    else:
+                        number_of_reads = -1 # error
+                    # benchmark
+                    result_map = phagefilter.parse_output(output_path, genomes_path=genome_path)
+                    recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
+                    read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
+                    # save to file
+                    output_file.write(f"{genome_count}, {number_of_reads}, {genomecount2Result[genome_count].elapsed_time}, {genomecount2Result[genome_count].max_memory}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
 
 def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
     """_summary_
@@ -47,21 +94,18 @@ def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilt
     number_of_genomes = len(os.listdir(genome_path))
     step_size = int(number_of_genomes/variation_count)+1
 
-    # benchmark impact of number of genomes on build.
-    genomecount2Result: Dict[int, BenchmarkResult] = {}
-    for genome_count in range(step_size, number_of_genomes, step_size):
-        with Experiment(genome_count, genome_path) as exp:
-            # run tool on tmp build directory
-            pf_build_cmd = phagefilter.build(
-                phagefilter_db, exp.genome_dir())
-            genomecount2Result[genome_count] = run_command(pf_build_cmd)
-
-    # save to output file
+    # open the output file and write the header
     with open(result_csv, "w+") as output_file:
         output_file.write(f"genome count, time (ns), memory (bytes)\n")
-        for genome_count, result in genomecount2Result.items():
-            output_file.write(
-                f"{genome_count}, {result.elapsed_time}, {result.max_memory}\n")
+        # benchmark impact of number of genomes on build.
+        genomecount2Result: Dict[int, BenchmarkResult] = {}
+        for genome_count in range(step_size, number_of_genomes, step_size):
+            with Experiment(genome_count, genome_path) as exp:
+                # run tool on tmp build directory
+                pf_build_cmd = phagefilter.build(phagefilter_db, exp.genome_dir())
+                genomecount2Result[genome_count] = run_command(pf_build_cmd)
+                # save the result to the output file
+                output_file.write(f"{genome_count}, {genomecount2Result[genome_count].elapsed_time}, {genomecount2Result[genome_count].max_memory}\n")
 
 def benchtest_parameter_sweep(phagefilter: PhageFilter, test_directory: Path, phagefilter_db: Path, genome_path: Path, result_csv: Path):
     """_summary_
