@@ -67,6 +67,14 @@ pub struct ReadClass {
     pub kmers: Vec<Vec<u8>>,
 }
 
+impl ReadClass {
+    pub fn new(sequence: Vec<u8>, kmer_size: usize) -> ReadClass {
+        ReadClass {
+            kmers: get_kmers(&sequence, &kmer_size),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum RecordTypes {
     FastaRecords(fasta::Records<BufReader<BufReader<File>>>),
