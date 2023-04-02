@@ -187,47 +187,46 @@ pub(crate) fn get_leaf_counts<'a>(bloom_node: &'a BloomNode) -> Vec<(&'a str, us
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::bloom_tree;
-//     use crate::file_parser::RecordTypes;
-//     use bio::io::fasta;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bloom_tree;
+    use crate::file_parser::RecordTypes;
+    use crate::read_parser::ReadClass;
+    use bio::io::fasta;
 
-//     #[test]
-//     fn test_query_passes() {
-//         let kmer_size = 3;
-//         // All kmers must match
-//         let all_threshold = 1.0;
-//         // No match required
-//         let no_threshold = 0.0;
+    #[test]
+    fn test_query_passes() {
+        let kmer_size = 3;
+        // All kmers must match
+        let all_threshold = 1.0;
+        // No match required
+        let no_threshold = 0.0;
 
-//         let genome =
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCGCA".as_ref()));
-//         let read_same =
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "ATCG".as_ref()));
-//         let read_different =
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "AAAA".as_ref()));
+        let genome =
+            RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCGCA".as_ref()));
+        let read_same = ReadClass::new("ATCG".to_string().into_bytes(), kmer_size);
+        let read_different = ReadClass::new("AAAA".to_string().into_bytes(), kmer_size);
 
-//         let tree = bloom_tree::create_bloom_tree(vec![genome], &kmer_size);
-//         let root = tree.root.unwrap();
+        let tree = bloom_tree::create_bloom_tree(vec![genome], &kmer_size);
+        let root = tree.root.unwrap();
 
-//         assert!(query_passes(&root, &read_same, all_threshold, kmer_size));
-//         assert!(!query_passes(
-//             &root,
-//             &read_different,
-//             all_threshold,
-//             kmer_size,
-//         ));
-//         assert!(query_passes(&root, &read_same, no_threshold, kmer_size));
-//         assert!(query_passes(
-//             &root,
-//             &read_different,
-//             no_threshold,
-//             kmer_size,
-//         ));
-//     }
-
+        assert!(query_passes(&root, &read_same, all_threshold, kmer_size));
+        assert!(!query_passes(
+            &root,
+            &read_different,
+            all_threshold,
+            kmer_size,
+        ));
+        assert!(query_passes(&root, &read_same, no_threshold, kmer_size));
+        assert!(query_passes(
+            &root,
+            &read_different,
+            no_threshold,
+            kmer_size,
+        ));
+    }
+}
 //     #[test]
 //     fn test_query_and_leaf_counts() {
 //         let kmer_size = 5;
