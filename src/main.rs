@@ -55,6 +55,9 @@ enum Commands {
         /// Number of threads to use for read matching.
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
+        /// Size of the read blocks (how many reads in mem at a time).
+        #[arg(required = false, default_value_t = usize::MAX, short, long)]
+        read_block_size: usize,
         /// Filtering theshold. (Fraction of kmers needed to pass)
         #[arg(required = false, default_value_t = 1.0, short, long)]
         cuttoff_threshold: f32,
@@ -104,6 +107,7 @@ fn main() {
             out,
             db_path,
             threads,
+            read_block_size,
             cuttoff_threshold,
         } => {
             // initial message to show used parameters.
@@ -119,14 +123,13 @@ fn main() {
             // load bloom tree from disk
             let full_db_path: &Path = Path::new(db_path);
             let mut bloom_tree: bloom_tree::BloomTree = bloom_tree::BloomTree::load(full_db_path);
-            // parse reads and check for presence in the bloom tree.
+            // parse reads
             print!("Querying reads... \n");
-            println!("{}", bloom_tree.kmer_size);
-            //f32::INFINITY as usize
-            let mut readqueue = read_parser::ReadQueue::new(&reads, 100, bloom_tree.kmer_size);
+            let mut readqueue =
+                read_parser::ReadQueue::new(&reads, *read_block_size, bloom_tree.kmer_size);
+            // Check for presence in the bloom tree; block-by-block
             let mut read_block: Vec<read_parser::ReadClass> = readqueue.next_block();
             while !read_block.is_empty() {
-                //println!("{:?}\n\n", block);
                 bloom_tree = query::query_batch(bloom_tree, &read_block, *cuttoff_threshold);
                 read_block = readqueue.next_block();
             }
