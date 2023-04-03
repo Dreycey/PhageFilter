@@ -2,6 +2,7 @@ mod bloom_filter;
 mod bloom_tree;
 mod file_parser;
 mod query;
+mod read_parser;
 use clap::{arg, Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
 use log;
@@ -15,6 +16,7 @@ use std::path::Path;
 #[command(about = "A fast, simple and efficient metagenomic classification tool.", long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
+    /// Different command options. (Build or Query)
     #[command(subcommand)]
     command: Commands,
     /// Print log statements to stdout.
@@ -24,7 +26,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Builds the BloomTree
+    /// Builds the BloomTree.
     Build {
         /// Path to genomes file or directory. (Fasta)
         #[arg(required = true, short, long)]
@@ -32,14 +34,14 @@ enum Commands {
         /// Path to store the tree to disk.
         #[arg(required = true, short, long)]
         db_path: String,
-        /// Number of threads to use to build the bloom tree
+        /// Number of threads to use to build the bloom tree.
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
         /// Size of the kmer to use; use with caution!
         #[arg(required = false, default_value_t = 20, short, long)]
         kmer_size: usize,
     },
-    /// Queries a set of reads (ran after building the bloom tree)
+    /// Queries a set of reads. (ran after building the bloom tree)
     Query {
         /// Path to read file or directory of reads. (Fasta or Fastq, or dirs with both)
         #[arg(required = true, short, long)]
@@ -50,10 +52,13 @@ enum Commands {
         /// Path of the tree stored to disk.
         #[arg(required = true, short, long)]
         db_path: String,
-        /// Number of threads to use for read matching
+        /// Number of threads to use for read matching.
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
-        /// Filtering theshold (Fraction of kmers needed to pass)
+        /// Size of the read blocks (how many reads in mem at a time).
+        #[arg(required = false, default_value_t = usize::MAX, short, long)]
+        read_block_size: usize,
+        /// Filtering theshold. (Fraction of kmers needed to pass)
         #[arg(required = false, default_value_t = 1.0, short, long)]
         cuttoff_threshold: f32,
     },
@@ -102,6 +107,7 @@ fn main() {
             out,
             db_path,
             threads,
+            read_block_size,
             cuttoff_threshold,
         } => {
             // initial message to show used parameters.
@@ -116,15 +122,21 @@ fn main() {
                 .unwrap();
             // load bloom tree from disk
             let full_db_path: &Path = Path::new(db_path);
-            let mut bloom_node: bloom_tree::BloomTree = bloom_tree::BloomTree::load(full_db_path);
-            // parse reads and check for presence in the bloom tree.
+            let mut bloom_tree: bloom_tree::BloomTree = bloom_tree::BloomTree::load(full_db_path);
+            // parse reads
             print!("Querying reads... \n");
-            let parsed_reads: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&reads);
-            bloom_node = query::query_batch(bloom_node, parsed_reads, *cuttoff_threshold);
+            let mut readqueue =
+                read_parser::ReadQueue::new(&reads, *read_block_size, bloom_tree.kmer_size);
+            // Check for presence in the bloom tree; block-by-block
+            let mut read_block: Vec<read_parser::ReadClass> = readqueue.next_block();
+            while !read_block.is_empty() {
+                bloom_tree = query::query_batch(bloom_tree, &read_block, *cuttoff_threshold);
+                read_block = readqueue.next_block();
+            }
             // open output file to write to
             let mut out_file = File::create(out).unwrap();
             // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
-            query::save_leaf_counts(&bloom_node.root.unwrap(), &mut out_file);
+            query::save_leaf_counts(&bloom_tree.root.unwrap(), &mut out_file);
             print!("Finished. \n");
         }
     }
