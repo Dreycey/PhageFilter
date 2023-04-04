@@ -325,37 +325,43 @@ pub(crate) fn create_bloom_tree(
     bloom_tree
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::file_parser::RecordTypes;
-//     use bio::io::fasta;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::file_parser::RecordTypes;
+    use bio::io::fasta;
 
-//     #[test]
-//     fn test_empty_tree_insert() {
-//         let kmer_size = 5;
-//         let mut tree = BloomTree::new(kmer_size);
-//         let record_id = "test";
-//         let record =
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(record_id, None, "ATCAG".as_ref()));
-//         let mut expected_root = Box::new(BloomNode::new(
-//             tree.hash_states.clone(),
-//             Some(record_id.to_string()),
-//         ));
-//         // The root's bloom filter should just be the bloom filter you get from the record
-//         expected_root
-//             .bloom_filter
-//             .union(&tree.init_leaf(&record).bloom_filter);
-//         let expected_tree = BloomTree {
-//             root: Some(expected_root),
-//             kmer_size: kmer_size,
-//             hash_states: tree.hash_states.clone(),
-//         };
+    #[test]
+    fn test_empty_tree_insert() {
+        let kmer_size = 5;
+        let mut tree = BloomTree::new(kmer_size);
+        let record_id = "";
+        let record = file_parser::DNASequence::new(
+            "ATCAG".as_bytes().to_vec(),
+            record_id.to_string(),
+            kmer_size,
+        );
+        let mut expected_root = Box::new(BloomNode::new(
+            tree.hash_states.clone(),
+            Some(record_id.to_string()),
+        ));
 
-//         tree = tree.insert(&record);
+        // The root's bloom filter should just be the bloom filter you get from the record
+        expected_root
+            .bloom_filter
+            .union(&tree.init_leaf(&record).bloom_filter);
 
-//         assert_eq!(tree, expected_tree);
-//     }
+        let expected_tree = BloomTree {
+            root: Some(expected_root),
+            kmer_size: kmer_size,
+            hash_states: tree.hash_states.clone(),
+        };
+
+        tree = tree.insert(&record);
+
+        assert_eq!(tree, expected_tree);
+    }
+}
 
 //     #[test]
 //     fn test_one_elem_tree_insert() {

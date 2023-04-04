@@ -203,10 +203,21 @@ mod tests {
         // No match required
         let no_threshold = 0.0;
 
-        let genome =
-            RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCGCA".as_ref()));
-        let read_same = DNASequence::new("ATCG".to_string().into_bytes(), kmer_size);
-        let read_different = DNASequence::new("AAAA".to_string().into_bytes(), kmer_size);
+        let genome = DNASequence::new(
+            "ATCGCA".to_string().into_bytes(),
+            "genome".to_string(),
+            kmer_size,
+        );
+        let read_same = DNASequence::new(
+            "ATCG".to_string().into_bytes(),
+            "read_same".to_string(),
+            kmer_size,
+        );
+        let read_different = DNASequence::new(
+            "AAAA".to_string().into_bytes(),
+            "read_different".to_string(),
+            kmer_size,
+        );
 
         let tree = bloom_tree::create_bloom_tree(vec![genome], &kmer_size);
         let root = tree.root.unwrap();
