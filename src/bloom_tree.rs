@@ -26,10 +26,10 @@ const TREE_FILENAME: &'static str = "tree.bin";
 pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
     pub(crate) root: Option<Box<BloomNode>>,
 
-    // Size of kmers in the bloom filters
+    /// Size of kmers in the bloom filters
     pub(crate) kmer_size: usize,
 
-    // Random states to seed hash functions from. If we use the same random states to seed hash functions, we'll get the same exact hash functions. We need this property since we'll be unioning bloom trees.
+    /// Random states to seed hash functions from. If we use the same random states to seed hash functions, we'll get the same exact hash functions. We need this property since we'll be unioning bloom trees.
     pub(crate) hash_states: (R, S),
 }
 
@@ -103,7 +103,7 @@ impl BloomTree<HashSeed, HashSeed> {
         );
 
         // Create new leaf.
-        let node: Box<BloomNode> = self.init_leaf(genome);
+        let node: Box<BloomNode> = self.init_leaf_node(genome);
 
         // insert the node into the tree.
         match self.root {
@@ -123,21 +123,18 @@ impl BloomTree<HashSeed, HashSeed> {
     ///
     /// # Returns
     /// - A new BloomNode, representing a to-be leaf node.
-    fn init_leaf(&self, genome: &file_parser::DNASequence) -> Box<BloomNode> {
-        // parse information from the input file
-        let id: &String = &genome.id;
-        let kmers: &Vec<Vec<u8>> = &genome.kmers;
+    fn init_leaf_node(&self, genome: &file_parser::DNASequence) -> Box<BloomNode> {
         // Create new node.
-        let mut node: Box<BloomNode> = Box::new(BloomNode::new(
+        let mut new_leaf_node: Box<BloomNode> = Box::new(BloomNode::new(
             self.hash_states.clone(),
-            Some(id.to_string()),
+            Some(genome.id.clone()),
         ));
         // map kmers into the bloom filter.
-        for kmer in kmers {
-            node.bloom_filter.insert(&kmer);
+        for kmer in &genome.kmers {
+            new_leaf_node.bloom_filter.insert(&kmer);
         }
-        log::debug!("(bloom tree; init()) Adding {}", id);
-        return node;
+        log::debug!("(bloom tree; init()) Adding {}", genome.id);
+        return new_leaf_node;
     }
 
     /// Returns an internal node, given two nodes containing
@@ -159,14 +156,16 @@ impl BloomTree<HashSeed, HashSeed> {
         let mut rng = rand::thread_rng();
         let n2: u16 = rng.gen();
         let node_name = "Internal Node".to_string() + "_" + &n2.to_string();
-        let mut node = Box::new(BloomNode::new(hash_states.clone(), Some(node_name)));
+        let mut new_internal_node = Box::new(BloomNode::new(hash_states.clone(), Some(node_name)));
 
         // Combine children's bloom filters
-        node.bloom_filter.union(&current_node.bloom_filter);
-        node.bloom_filter.union(&new_node.bloom_filter);
-        node.left_child = Some(current_node);
-        node.right_child = Some(new_node);
-        node
+        new_internal_node
+            .bloom_filter
+            .union(&current_node.bloom_filter);
+        new_internal_node.bloom_filter.union(&new_node.bloom_filter);
+        new_internal_node.left_child = Some(current_node);
+        new_internal_node.right_child = Some(new_node);
+        return new_internal_node;
     }
 
     /// Adds a BloomNode to a given BloomTree.
@@ -349,7 +348,7 @@ mod tests {
         // The root's bloom filter should just be the bloom filter you get from the record
         expected_root
             .bloom_filter
-            .union(&tree.init_leaf(&record).bloom_filter);
+            .union(&tree.init_leaf_node(&record).bloom_filter);
 
         let expected_tree = BloomTree {
             root: Some(expected_root),
