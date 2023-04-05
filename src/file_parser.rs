@@ -1,23 +1,10 @@
-/// Methods for parsing individual or a directory
-/// of Fasta or Fastq files.
-///
-/// # Example Usage
-///
-/// ```rust
-/// let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&seq_file_path);
-/// ```
 use bio::alphabets::dna;
-use bio::io::fasta;
-use bio::io::fastq;
+use bio::io::{fasta, fastq};
+use rayon::prelude::*;
 use std::fs;
-use std::fs::metadata;
+use std::fs::{metadata, File};
+use std::io::BufReader;
 use std::path::Path;
-
-#[derive(Clone, Debug)]
-pub enum RecordTypes {
-    FastaRecord(fasta::Record),
-    FastqRecord(fastq::Record),
-}
 
 /// Returns the lexographically smallest kmer between a
 /// given kmer and its reverse compliment.
@@ -30,16 +17,13 @@ pub enum RecordTypes {
 ///
 /// # Panics
 /// - N/A
-fn get_lex_less(kmer: Vec<u8>) -> Vec<u8> {
-    let kmer_revc: Vec<u8> = dna::revcomp(&kmer);
-    for index in 0..kmer.len() {
-        if kmer[index] < kmer_revc[index] {
-            return kmer;
-        } else if kmer[index] > kmer_revc[index] {
-            return kmer_revc;
-        }
+fn get_lex_less(kmer: &[u8]) -> Vec<u8> {
+    let kmer_revc: Vec<u8> = dna::revcomp(kmer);
+    match kmer.cmp(&kmer_revc) {
+        std::cmp::Ordering::Less => kmer.to_vec(),
+        std::cmp::Ordering::Greater => kmer_revc,
+        std::cmp::Ordering::Equal => kmer.to_vec(),
     }
-    return kmer; // if equal.
 }
 
 /// Returns the kmers for a given sequence.
@@ -49,179 +33,169 @@ fn get_lex_less(kmer: Vec<u8>) -> Vec<u8> {
 ///
 /// # Returns
 /// - A vector containing the kmers for the given sequence, in u8.
-///   the output vector is of type Vec<Vec<u8>>.
+///   the output vector is of type Vec<Vec<u8>>. An empty vector is
+///   returned if the kmer is of size 0 or longer than the sequence.
 ///
 /// # Panics
 /// - if the given sequence is not as long as the given kmer size. or if less/equal to zero.
 pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
     if kmer_size > sequence.len() || kmer_size <= 0 {
-        // Can't get kmers of a size longer than the sequence
-        // Can't get kmers of size 0
-        log::error!("(get_kmers()) The kmer size is greater than the sequence length! kmer size:{} seq len:{}", kmer_size, sequence.len());
         return vec![];
     }
-
-    let mut max_kmers: Vec<Vec<u8>> = vec![];
-    // Rust ranges are exclusive on the end index, so adding 1 ensures we get the last kmer
-    for kmer_ind in 0..sequence.len() - kmer_size + 1 {
-        let kmer: Vec<u8> = sequence[kmer_ind..kmer_ind + kmer_size].to_vec();
-        max_kmers.push(get_lex_less(kmer));
-    }
+    let kmer_count = sequence.len() - kmer_size + 1; // zero indexed.
+                                                     // let mut max_kmers: Vec<Vec<u8>> = Vec::with_capacity(kmer_count);
+                                                     // for kmer_ind in 0..kmer_count {
+                                                     //     let kmer_slice = &sequence[kmer_ind..kmer_ind + kmer_size];
+                                                     //     max_kmers.push(get_lex_less(kmer_slice.to_vec()));
+                                                     // }
+    let max_kmers: Vec<Vec<u8>> = (0..kmer_count)
+        .into_par_iter()
+        .map(|kmer_ind| {
+            let kmer_slice = &sequence[kmer_ind..kmer_ind + kmer_size];
+            get_lex_less(kmer_slice)
+        })
+        .collect();
     max_kmers
 }
 
-/// Returns the sequence from a RecordTypes enum.
-///
-/// # Parameters
-/// - `genome`: May be a read or a genome, of enum type RecordTypes
-///
-/// # Returns
-/// - The sequence from a RecordTypes enum, of type Vec<u8>
-///
-/// # Panics
-/// - N/A
-pub fn get_sequence(genome: &RecordTypes) -> Vec<u8> {
-    let sequence: Vec<u8> = match genome {
-        RecordTypes::FastaRecord(record) => record.seq().to_vec(),
-        RecordTypes::FastqRecord(record) => record.seq().to_vec(),
-    };
-    sequence
+#[derive(Debug, Clone)]
+pub struct DNASequence {
+    // pub sequence: Vec<u8>,
+    pub id: String,
+    pub kmers: Vec<Vec<u8>>,
 }
 
-/// Returns the sequence ID from a RecordTypes enum.
-///
-/// # Parameters
-/// - `genome`: May be a read or a genome, of enum type RecordTypes
-///
-/// # Returns
-/// - The sequence ID from a RecordTypes enum, of type Vec<u8>
-///
-/// # Panics
-/// - N/A
-pub fn get_id(genome: &RecordTypes) -> &str {
-    let sequence: &str = match genome {
-        RecordTypes::FastaRecord(record) => record.id(),
-        RecordTypes::FastqRecord(record) => record.id(),
-    };
-    sequence
+impl DNASequence {
+    pub fn new(sequence: Vec<u8>, id: String, kmer_size: usize) -> DNASequence {
+        DNASequence {
+            id: "".to_string(),
+            kmers: get_kmers(&sequence, &kmer_size),
+        }
+    }
 }
 
-/// Obtains a list of genome objects given a genome directory,
-/// or a genome file (i.e. fasta or fastq)
-///
-/// # Notes
-/// 1. TODO: This stores all of the reads into memory, using iterator
-///          may be prefered
-///
-/// # Parameters
-/// - `genomes_path`: global path to the genome/read files (Fasta or Fastq, or directory).
-///
-/// # Returns
-/// - A vector of RecordTypes (Vec<RecordTypes>)
-///
-/// # Panics
-/// - N/A
-pub fn get_genomes(genomes_path: &String) -> Vec<RecordTypes> {
-    let supported_extensions = ["fa", "fasta", "fna", "fq", "fastq"];
-    let md = metadata(genomes_path).unwrap();
-    let mut records_arr: Vec<RecordTypes> = vec![];
-    if md.is_dir() {
-        // get files matching the extensions.
-        let paths = fs::read_dir(genomes_path).unwrap().filter(|p| match p {
-            Ok(s) => match s.path().extension() {
-                Some(ext) => supported_extensions.contains(&ext.to_str().unwrap()),
-                None => false,
-            },
-            _ => true,
+#[derive(Debug)]
+pub enum RecordTypes {
+    FastaRecords(fasta::Records<BufReader<BufReader<File>>>),
+    FastqRecords(fastq::Records<BufReader<BufReader<File>>>),
+}
+
+impl RecordTypes {
+    /// Returns the lexographically smallest kmer between a
+    /// given kmer and its reverse compliment.
+    ///
+    /// # Parameters
+    /// - `kmer_size`: The kmer size used in the tree.
+    ///
+    /// # Returns
+    /// - returns the read/record as a 'ReadClass'
+    ///
+    /// # Panics
+    /// - N/A
+    pub fn next_read(&mut self, kmer_size: usize) -> Option<DNASequence> {
+        match self {
+            RecordTypes::FastaRecords(record) => {
+                let record = record.next();
+                if record.is_none() {
+                    return None;
+                }
+                let seq_record = record.unwrap().unwrap();
+                let sequence = seq_record.seq().to_vec();
+                let id = seq_record.id().to_string();
+                let kmers = get_kmers(&sequence, &kmer_size);
+                Some(DNASequence {
+                    // sequence,
+                    id,
+                    kmers,
+                })
+            }
+            RecordTypes::FastqRecords(record) => {
+                let record = record.next();
+                if record.is_none() {
+                    return None;
+                }
+                let seq_record = record.unwrap().unwrap();
+                let sequence = seq_record.seq().to_vec();
+                let id = seq_record.id().to_string();
+                let kmers = get_kmers(&sequence, &kmer_size);
+                Some(DNASequence {
+                    // sequence,
+                    id,
+                    kmers,
+                })
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ReadQueue {
+    filequeue: Vec<String>,
+    block_size: usize,
+    kmer_size: usize,
+    curr_file: Option<Box<RecordTypes>>,
+}
+
+impl ReadQueue {
+    pub fn get_next_file(&mut self) {
+        self.curr_file = self.filequeue.pop().map(|filepath| {
+            let reader = BufReader::with_capacity(100, File::open(&filepath).unwrap());
+            if filepath.ends_with(".fq") || filepath.ends_with(".fastq") {
+                Box::new(RecordTypes::FastqRecords(
+                    fastq::Reader::new(reader).records(),
+                ))
+            } else {
+                Box::new(RecordTypes::FastaRecords(
+                    fasta::Reader::new(reader).records(),
+                ))
+            }
         });
-        // use paths to parse files.
-        for path in paths {
-            let mut tmp_arr: Vec<RecordTypes> =
-                parse_genome_file(&path.unwrap().path().to_str().unwrap().to_string());
-            records_arr.append(&mut tmp_arr);
+    }
+
+    pub fn next_block(&mut self) -> Vec<DNASequence> {
+        let mut read_block: Vec<DNASequence> = vec![];
+        if self.curr_file.is_none() {
+            self.get_next_file();
         }
-        // if records are empty thereafter.
-        if records_arr.len() == 0 {
-            panic!("Could not load any genomes. May not have any files with a supported extension in the provided directory.");
+        while self.block_size > read_block.len() && !self.curr_file.is_none() {
+            if let Some(result) = self.curr_file.as_mut().unwrap().next_read(self.kmer_size) {
+                read_block.push(result);
+            } else {
+                self.get_next_file();
+            }
         }
+        read_block
+    }
 
-        return records_arr;
-    } else {
-        // if it's a file then parse the single file.
-        return parse_genome_file(genomes_path);
+    pub fn new(file_path: &str, block_size: usize, kmer_size: usize) -> Self {
+        ReadQueue {
+            filequeue: get_file_names(&file_path),
+            block_size,
+            kmer_size,
+            curr_file: None,
+        }
     }
 }
 
-/// Obtains a list of genome objects given a genome directory,
-/// or a genome file (i.e. fasta or fastq)
-///
-/// # Notes
-/// 1. TODO: This stores all of the reads into memory, using iterator
-///          may be prefered
-///
-/// # Parameters
-/// - `genomes_path`: global path to the genome/read files (Fasta or Fastq, or directory).
-///
-/// # Returns
-/// - A vector of RecordTypes (Vec<RecordTypes>)
-///
-/// # Panics
-/// - N/A
-fn parse_genome_file(genomes_file_path: &String) -> Vec<RecordTypes> {
-    log::debug!("Parsing file: {}", genomes_file_path);
-    match Path::new(genomes_file_path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-    {
-        Some("fa") | Some("fasta") | Some("fna") => fasta_parser(&genomes_file_path),
-        Some("fq") | Some("fastq") => fastq_parser(&genomes_file_path),
-        _ => panic!("Incorrect file path: {}", genomes_file_path),
-    }
-}
-/// This method parses a fasta file.
-///
-/// # Notes
-/// 1. TODO: This stores all of the reads into memory, using iterator
-///          may be prefered
-///
-/// # Parameters
-/// - `file_path`: global path to the individual genome/read file (Fasta).
-///
-/// # Returns
-/// - A vector of RecordTypes (Vec<RecordTypes>)
-///
-/// # Panics
-/// - N/A
-fn fasta_parser(file_path: &String) -> Vec<RecordTypes> {
-    let reader = fasta::Reader::from_file(file_path).unwrap();
-    let mut records_arr: Vec<RecordTypes> = vec![];
-    for result in reader.records() {
-        records_arr.push(RecordTypes::FastaRecord(result.unwrap()));
-    }
-    return records_arr;
-}
+fn get_file_names(file_path: &str) -> Vec<String> {
+    let supported_extensions = ["fa", "fasta", "fna", "fq", "fastq"];
+    let path = Path::new(file_path);
 
-/// This method parses a fastq file.
-///
-/// # Notes
-/// 1. TODO: This stores all of the reads into memory, using iterator
-///          may be prefered
-///
-/// # Parameters
-/// - `file_path`: global path to the individual genome/read file (Fastq).
-///
-/// # Returns
-/// - A vector of RecordTypes (Vec<RecordTypes>)
-///
-/// # Panics
-/// - N/A
-fn fastq_parser(file_path: &String) -> Vec<RecordTypes> {
-    let reader = fastq::Reader::from_file(file_path).unwrap();
-    let mut records_arr: Vec<RecordTypes> = vec![];
-    for result in reader.records() {
-        records_arr.push(RecordTypes::FastqRecord(result.unwrap()));
+    if path.metadata().unwrap().is_file() {
+        return vec![file_path.to_string()];
     }
-    return records_arr;
+
+    fs::read_dir(file_path)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|dir_entry| dir_entry.path())
+        .filter(|path| {
+            path.extension()
+                .map(|ext| supported_extensions.contains(&ext.to_str().unwrap()))
+                .unwrap_or(false)
+        })
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect()
 }
 
 #[cfg(test)]
@@ -242,5 +216,23 @@ mod tests {
         );
         assert_eq!(get_kmers(&vec![1, 2, 3], &2), vec![vec![1, 2], vec![2, 3]]);
         assert_eq!(get_kmers(&vec![1, 2, 3], &3), vec![vec![1, 2, 3]]);
+    }
+
+    #[test]
+    fn test_get_lex_less() {
+        // Test case 1: kmer and its reverse complement are equal
+        let kmer = &vec![b'A', b'C', b'G', b'T'][..]; // <-- Lexically lesser
+        let revcomp_kmer = &vec![b'A', b'C', b'G', b'T'];
+        assert_eq!(get_lex_less(&kmer), vec![b'A', b'C', b'G', b'T']);
+
+        // Test case 2: kmer is lexically less than its reverse complement
+        let kmer2 = &vec![b'A', b'A', b'T', b'G'][..]; // <-- Lexically lesser
+        let revcomp_kmer2 = &vec![b'C', b'A', b'T', b'T'];
+        assert_eq!(get_lex_less(&kmer2), vec![b'A', b'A', b'T', b'G']);
+
+        // Test case 3: kmer is lexically greater than its reverse complement
+        let kmer3 = &vec![b'G', b'T', b'A', b'G'][..];
+        let revcomp_kmer3 = &vec![b'C', b'T', b'A', b'C']; // <-- Lexically lesser
+        assert_eq!(get_lex_less(&kmer3), vec![b'C', b'T', b'A', b'C']);
     }
 }

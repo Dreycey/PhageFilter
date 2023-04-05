@@ -1,8 +1,8 @@
 mod bloom_filter;
 mod bloom_tree;
+// mod file_parser;
 mod file_parser;
 mod query;
-mod read_parser;
 use clap::{arg, Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
 use log;
@@ -93,13 +93,24 @@ fn main() {
                 .build_global()
                 .unwrap();
             // obtain genomes from fasta/fastq files
-            let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&genomes);
+            //let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&genomes);
+            let mut genome_queue: file_parser::ReadQueue =
+                file_parser::ReadQueue::new(&genomes, 1, *kmer_size);
+            let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
             print!("Building the SBT... \n");
-            // build: bloom tree
-            let bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, kmer_size);
+            // build: bloom trees
+            let mut bloom_tree = bloom_tree::BloomTree::new(*kmer_size);
+
+            while !genome_block.is_empty() {
+                for genome in genome_block {
+                    bloom_tree = bloom_tree.insert(&genome);
+                }
+                genome_block = genome_queue.next_block();
+            }
+
             // save tree to disk
             let save_dir = Path::new(db_path);
-            bloom_node.save(save_dir);
+            bloom_tree.save(save_dir);
             print!("Finished. \n");
         }
         Commands::Query {
@@ -126,9 +137,9 @@ fn main() {
             // parse reads
             print!("Querying reads... \n");
             let mut readqueue =
-                read_parser::ReadQueue::new(&reads, *read_block_size, bloom_tree.kmer_size);
+                file_parser::ReadQueue::new(&reads, *read_block_size, bloom_tree.kmer_size);
             // Check for presence in the bloom tree; block-by-block
-            let mut read_block: Vec<read_parser::ReadClass> = readqueue.next_block();
+            let mut read_block: Vec<file_parser::DNASequence> = readqueue.next_block();
             while !read_block.is_empty() {
                 bloom_tree = query::query_batch(bloom_tree, &read_block, *cuttoff_threshold);
                 read_block = readqueue.next_block();

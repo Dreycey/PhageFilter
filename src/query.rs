@@ -14,7 +14,7 @@
 /// ```
 use crate::bloom_filter::ASMS;
 use crate::bloom_tree::{BloomNode, BloomTree};
-use crate::read_parser;
+use crate::file_parser;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::Write;
@@ -36,7 +36,7 @@ use std::io::Write;
 /// - N/A
 fn query_passes(
     bloom_node: &Box<BloomNode>,
-    read: &read_parser::ReadClass,
+    read: &file_parser::DNASequence,
     threshold: f32,
     kmer_size: usize,
 ) -> bool {
@@ -65,13 +65,13 @@ fn query_passes(
 /// - N/A
 pub(crate) fn query_batch(
     mut bloom_tree: BloomTree,
-    read_set: &[read_parser::ReadClass],
+    read_set: &[file_parser::DNASequence],
     threshold: f32,
 ) -> BloomTree {
     bloom_tree.root = match bloom_tree.root {
         Some(root) => Some(_query_batch(
             root,
-            &read_set.iter().collect::<Vec<&read_parser::ReadClass>>()[..],
+            &read_set.iter().collect::<Vec<&file_parser::DNASequence>>()[..],
             threshold,
             bloom_tree.kmer_size,
         )),
@@ -97,11 +97,11 @@ pub(crate) fn query_batch(
 /// - N/A
 fn _query_batch(
     mut bloom_node: Box<BloomNode>,
-    read_set: &[&read_parser::ReadClass],
+    read_set: &[&file_parser::DNASequence],
     threshold: f32,
     kmer_size: usize,
 ) -> Box<BloomNode> {
-    let pass: Vec<&read_parser::ReadClass> = read_set
+    let pass: Vec<&file_parser::DNASequence> = read_set
         .par_iter()
         .filter(|&&read| query_passes(&bloom_node, read, threshold, kmer_size))
         .map(|&read| read) // Use map() to get the right item type
@@ -191,8 +191,8 @@ pub(crate) fn get_leaf_counts<'a>(bloom_node: &'a BloomNode) -> Vec<(&'a str, us
 mod tests {
     use super::*;
     use crate::bloom_tree;
+    use crate::file_parser::DNASequence;
     use crate::file_parser::RecordTypes;
-    use crate::read_parser::ReadClass;
     use bio::io::fasta;
 
     #[test]
@@ -203,10 +203,21 @@ mod tests {
         // No match required
         let no_threshold = 0.0;
 
-        let genome =
-            RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCGCA".as_ref()));
-        let read_same = ReadClass::new("ATCG".to_string().into_bytes(), kmer_size);
-        let read_different = ReadClass::new("AAAA".to_string().into_bytes(), kmer_size);
+        let genome = DNASequence::new(
+            "ATCGCA".to_string().into_bytes(),
+            "genome".to_string(),
+            kmer_size,
+        );
+        let read_same = DNASequence::new(
+            "ATCG".to_string().into_bytes(),
+            "read_same".to_string(),
+            kmer_size,
+        );
+        let read_different = DNASequence::new(
+            "AAAA".to_string().into_bytes(),
+            "read_different".to_string(),
+            kmer_size,
+        );
 
         let tree = bloom_tree::create_bloom_tree(vec![genome], &kmer_size);
         let root = tree.root.unwrap();
