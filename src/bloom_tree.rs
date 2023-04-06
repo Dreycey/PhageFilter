@@ -58,7 +58,7 @@ pub(crate) struct BloomNode {
 
 fn create_cache() -> BloomFilterCache {
     // TODO: add the ability to change the size of the cache.
-    BloomFilterCache::new(2)
+    BloomFilterCache::new(5)
 }
 
 /// RandomState doesn't support equality comparisons so we ignore the hash_states when comparing BloomTrees.
@@ -95,9 +95,11 @@ impl BloomTree<HashSeed, HashSeed> {
     /// # Returns
     /// - a BloomTree instance.
     pub fn new(kmer_size: usize, directory: &PathBuf) -> Self {
+        std::fs::create_dir_all(directory).unwrap();
+        println!("directory: {:?}", directory.as_path());
         BloomTree {
             root: None,
-            bf_cache: BloomFilterCache::new(2), // TODO: update
+            bf_cache: BloomFilterCache::new(5), // TODO: update
             kmer_size,
             // initializes random hash state to use for the whole tree
             hash_states: (HashSeed::new(), HashSeed::new()),
@@ -281,8 +283,7 @@ impl BloomTree<HashSeed, HashSeed> {
         let full_bloom_filter_path = self.directory.clone().unwrap().join(&bloom_filter_path);
 
         // create and save the bloom filter.
-        let bloom_filter = create_bloom_filter(self.hash_states.clone());
-        //bloom_filter.save_to_file(full_bloom_filter_path);
+        let bloom_filter = create_bloom_filter(self.hash_states.clone(), full_bloom_filter_path);
 
         // Cache the loaded Bloom filter
         self.bf_cache.add_filter(&bloom_filter_path, bloom_filter);
@@ -323,8 +324,8 @@ impl BloomNode {
             left_child: None,
             right_child: None,
             tax_id,
-            bloom_filter_path,
-            bloom_filter: create_bloom_filter(hash_states),
+            bloom_filter_path: bloom_filter_path.clone(),
+            bloom_filter: create_bloom_filter(hash_states, bloom_filter_path.clone()),
             mapped_reads: 0,
         }
     }

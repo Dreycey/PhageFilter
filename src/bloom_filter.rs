@@ -45,15 +45,20 @@ mod hash_iter;
 pub mod hasher;
 use hasher::HashSeed;
 use serde::{Deserialize, Serialize};
+use std::any::TypeId;
 use std::cmp::{max, min};
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::hash::{BuildHasher, Hash};
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
-use std::path::Path;
+use std::ops::Drop;
+use std::path::{Path, PathBuf};
 
-pub fn create_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
+pub fn create_bloom_filter(
+    hash_states: (HashSeed, HashSeed),
+    full_bf_path: PathBuf,
+) -> BloomFilter {
     let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
     let expected_num_items: u32 = max_genome_size;
     log::debug!(
@@ -63,7 +68,9 @@ pub fn create_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
     // out of 100 items that are not inserted, expect 0.1 to return true for contain
     let false_positive_rate: f32 = 0.001;
     // instantiate a BloomFilter
-    let filter = BloomFilter::with_rate(false_positive_rate, expected_num_items, hash_states);
+    let mut filter = BloomFilter::with_rate(false_positive_rate, expected_num_items, hash_states);
+    filter.file_path = Some(full_bf_path);
+
     return filter;
 }
 
@@ -84,6 +91,95 @@ pub struct BloomFilter<R = HashSeed, S = HashSeed> {
     num_hashes: u32,
     hash_builder_one: R,
     hash_builder_two: S,
+    file_path: Option<PathBuf>,
+}
+
+// struct BloomFilter<R, S> {
+//     bits: BitVec,
+//     num_hashes: u32,
+//     hash_builder_one: R,
+//     hash_builder_two: S,
+//     file_path: Option<PathBuf>,
+// }
+
+impl<R, S> BloomFilter<R, S> {
+    fn as_bloom_filter(&mut self) -> &mut BloomFilter {
+        unsafe { &mut *(self as *mut Self as *mut BloomFilter) }
+    }
+}
+
+impl<R, S> Drop for BloomFilter<R, S> {
+    fn drop(&mut self) {
+        let bloomfilter_inner = self.as_bloom_filter();
+        // if let Some(path) = &self.file_path {
+        //     println!("Dropping: {:?}", path.as_path());
+        //     // println!("{}", self)
+        //     //save_to_file(bloomfilter_inner, path);
+        //     path = path.as_path();
+        // }
+        let binding = bloomfilter_inner
+            .file_path
+            .as_mut()
+            .expect("REASON")
+            .clone();
+        let path = &binding.as_path();
+        println!("DROPING FROM {:?}", path);
+        save_to_file(bloomfilter_inner, path);
+        println!("Droppingbf");
+    }
+}
+
+// pub fn save_to_file(bloomfilter: &BloomFilter, bloom_filter_path: &Path) {
+//     // Create the file at the given path
+//     let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
+//         panic!(
+//             "Failed to create Bloom filter file: {:?}",
+//             bloom_filter_path
+//         )
+//     });
+
+//     println!("bf {:?}", bloomfilter);
+//     // Create a buffered writer for the file
+//     let mut writer = BufWriter::new(file);
+
+//     // Serialize the Bloom filter into the writer
+//     bincode::serialize_into(&mut writer, &bloomfilter).unwrap_or_else(|_| {
+//         panic!(
+//             "Failed to serialize Bloom filter to file: {:?}",
+//             bloom_filter_path
+//         )
+//     });
+
+//     // Flush the writer to ensure the data is written to the file
+//     writer
+//         .flush()
+//         .unwrap_or_else(|_| panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path));
+// }
+
+pub fn save_to_file(bloomfilter: &BloomFilter, bloom_filter_path: &Path) {
+    // Create the file at the given path
+    let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
+        panic!(
+            "Failed to create Bloom filter file: {:?}",
+            bloom_filter_path
+        )
+    });
+
+    // Create a buffered writer for the file
+    let mut writer = BufWriter::new(file);
+
+    // Serialize the Bloom filter as JSON into the writer
+    serde_json::to_writer(&mut writer, &bloomfilter).unwrap_or_else(|_| {
+        panic!(
+            "Failed to serialize Bloom filter to file: {:?}",
+            bloom_filter_path
+        )
+    });
+
+    // Flush the writer to ensure the data is written to the file
+    writer
+        .flush()
+        .unwrap_or_else(|_| panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path));
 }
 
 /// Equality for bloom filters is judged only using the bits field
@@ -136,32 +232,6 @@ impl BloomFilter<HashSeed, HashSeed> {
         bloom_filter
     }
 
-    pub fn save_to_file(&self, bloom_filter_path: &Path) {
-        // Create the file at the given path
-        let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
-            panic!(
-                "Failed to create Bloom filter file: {:?}",
-                bloom_filter_path
-            )
-        });
-
-        // Create a buffered writer for the file
-        let mut writer = BufWriter::new(file);
-
-        // Serialize the Bloom filter into the writer
-        bincode::serialize_into(&mut writer, self).unwrap_or_else(|_| {
-            panic!(
-                "Failed to serialize Bloom filter to file: {:?}",
-                bloom_filter_path
-            )
-        });
-
-        // Flush the writer to ensure the data is written to the file
-        writer.flush().unwrap_or_else(|_| {
-            panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path)
-        });
-    }
-
     /// Create a new BloomFilter with the specified number of bits,
     /// and hashes
     pub fn with_size(
@@ -176,6 +246,7 @@ impl BloomFilter<HashSeed, HashSeed> {
             num_hashes: num_hashes,
             hash_builder_one,
             hash_builder_two,
+            file_path: None, // TODO: update
         }
     }
 
@@ -328,6 +399,7 @@ mod tests {
             num_hashes: 0,
             hash_builder_one: state.clone(),
             hash_builder_two: state.clone(),
+            file_path: None,
         }
     }
 
