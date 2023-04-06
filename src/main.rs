@@ -1,6 +1,6 @@
 mod bloom_filter;
 mod bloom_tree;
-// mod file_parser;
+mod cache;
 mod file_parser;
 mod query;
 use clap::{arg, Parser, Subcommand};
@@ -8,6 +8,7 @@ use clap_verbosity_flag::Verbosity;
 use log;
 use std::fs::File;
 use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "MyApp")]
@@ -87,23 +88,24 @@ fn main() {
                 threads,
                 kmer_size
             );
+
             // number of threads to run
             rayon::ThreadPoolBuilder::new()
                 .num_threads(*threads)
                 .build_global()
                 .unwrap();
+
             // obtain genomes from fasta/fastq files
-            //let parsed_genomes: Vec<file_parser::RecordTypes> = file_parser::get_genomes(&genomes);
             let mut genome_queue: file_parser::ReadQueue =
                 file_parser::ReadQueue::new(&genomes, 1, *kmer_size);
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
-            print!("Building the SBT... \n");
-            // build: bloom trees
-            let mut bloom_tree = bloom_tree::BloomTree::new(*kmer_size);
 
+            // build: bloom trees
+            print!("Building the SBT... \n");
+            let mut bloom_tree = bloom_tree::BloomTree::new(*kmer_size, &PathBuf::from(db_path));
             while !genome_block.is_empty() {
                 for genome in genome_block {
-                    bloom_tree = bloom_tree.insert(&genome);
+                    bloom_tree.insert(&genome);
                 }
                 genome_block = genome_queue.next_block();
             }

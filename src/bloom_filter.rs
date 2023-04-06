@@ -47,9 +47,13 @@ use hasher::HashSeed;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::fmt::{Debug, Formatter};
+use std::fs::File;
 use std::hash::{BuildHasher, Hash};
+use std::io::Write;
+use std::io::{BufReader, BufWriter};
+use std::path::Path;
 
-pub fn get_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
+pub fn create_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
     let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
     let expected_num_items: u32 = max_genome_size;
     log::debug!(
@@ -112,6 +116,52 @@ impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
 }
 
 impl BloomFilter<HashSeed, HashSeed> {
+    pub fn load_from_file(bloom_filter_path: &Path) -> Self {
+        // Open the file at the given path
+        let file = File::open(bloom_filter_path).unwrap_or_else(|_| {
+            panic!("Failed to open Bloom filter file: {:?}", bloom_filter_path)
+        });
+
+        // Create a buffered reader for the file
+        let reader = BufReader::new(file);
+
+        // Deserialize the Bloom filter from the reader
+        let bloom_filter: BloomFilter = bincode::deserialize_from(reader).unwrap_or_else(|_| {
+            panic!(
+                "Failed to deserialize Bloom filter from file: {:?}",
+                bloom_filter_path
+            )
+        });
+
+        bloom_filter
+    }
+
+    pub fn save_to_file(&self, bloom_filter_path: &Path) {
+        // Create the file at the given path
+        let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
+            panic!(
+                "Failed to create Bloom filter file: {:?}",
+                bloom_filter_path
+            )
+        });
+
+        // Create a buffered writer for the file
+        let mut writer = BufWriter::new(file);
+
+        // Serialize the Bloom filter into the writer
+        bincode::serialize_into(&mut writer, self).unwrap_or_else(|_| {
+            panic!(
+                "Failed to serialize Bloom filter to file: {:?}",
+                bloom_filter_path
+            )
+        });
+
+        // Flush the writer to ensure the data is written to the file
+        writer.flush().unwrap_or_else(|_| {
+            panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path)
+        });
+    }
+
     /// Create a new BloomFilter with the specified number of bits,
     /// and hashes
     pub fn with_size(
