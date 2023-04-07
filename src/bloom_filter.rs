@@ -129,33 +129,6 @@ impl<R, S> Drop for BloomFilter<R, S> {
     }
 }
 
-// pub fn save_to_file(bloomfilter: &BloomFilter, bloom_filter_path: &Path) {
-//     // Create the file at the given path
-//     let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
-//         panic!(
-//             "Failed to create Bloom filter file: {:?}",
-//             bloom_filter_path
-//         )
-//     });
-
-//     println!("bf {:?}", bloomfilter);
-//     // Create a buffered writer for the file
-//     let mut writer = BufWriter::new(file);
-
-//     // Serialize the Bloom filter into the writer
-//     bincode::serialize_into(&mut writer, &bloomfilter).unwrap_or_else(|_| {
-//         panic!(
-//             "Failed to serialize Bloom filter to file: {:?}",
-//             bloom_filter_path
-//         )
-//     });
-
-//     // Flush the writer to ensure the data is written to the file
-//     writer
-//         .flush()
-//         .unwrap_or_else(|_| panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path));
-// }
-
 pub fn save_to_file(bloomfilter: &BloomFilter, bloom_filter_path: &Path) {
     // Create the file at the given path
     let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
@@ -165,11 +138,12 @@ pub fn save_to_file(bloomfilter: &BloomFilter, bloom_filter_path: &Path) {
         )
     });
 
+    println!("bf {:?}", bloomfilter);
     // Create a buffered writer for the file
     let mut writer = BufWriter::new(file);
 
-    // Serialize the Bloom filter as JSON into the writer
-    serde_json::to_writer(&mut writer, &bloomfilter).unwrap_or_else(|_| {
+    // Serialize the Bloom filter into the writer
+    bincode::serialize_into(&mut writer, &bloomfilter).unwrap_or_else(|_| {
         panic!(
             "Failed to serialize Bloom filter to file: {:?}",
             bloom_filter_path
@@ -181,6 +155,32 @@ pub fn save_to_file(bloomfilter: &BloomFilter, bloom_filter_path: &Path) {
         .flush()
         .unwrap_or_else(|_| panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path));
 }
+
+// pub fn save_to_file(bloomfilter: &BloomFilter, bloom_filter_path: &Path) {
+//     // Create the file at the given path
+//     let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
+//         panic!(
+//             "Failed to create Bloom filter file: {:?}",
+//             bloom_filter_path
+//         )
+//     });
+
+//     // Create a buffered writer for the file
+//     let mut writer = BufWriter::new(file);
+
+//     // Serialize the Bloom filter as JSON into the writer
+//     serde_json::to_writer(&mut writer, &bloomfilter).unwrap_or_else(|_| {
+//         panic!(
+//             "Failed to serialize Bloom filter to file: {:?}",
+//             bloom_filter_path
+//         )
+//     });
+
+//     // Flush the writer to ensure the data is written to the file
+//     writer
+//         .flush()
+//         .unwrap_or_else(|_| panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path));
+// }
 
 /// Equality for bloom filters is judged only using the bits field
 impl PartialEq for BloomFilter<HashSeed, HashSeed> {

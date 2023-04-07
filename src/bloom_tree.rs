@@ -21,7 +21,11 @@ use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
+use std::sync::PoisonError;
 use std::sync::RwLock;
+use std::sync::RwLockReadGuard;
+use std::sync::RwLockWriteGuard;
+
 const TREE_FILENAME: &'static str = "tree.bin";
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -47,7 +51,6 @@ pub(crate) struct BloomNode {
     pub(crate) left_child: Option<Box<BloomNode>>,
     pub(crate) right_child: Option<Box<BloomNode>>,
     pub(crate) bloom_filter_path: PathBuf,
-    pub(crate) bloom_filter: BloomFilter,
 
     /// NCBI Taxonomy ID for the genome
     pub(crate) tax_id: Option<String>,
@@ -80,7 +83,6 @@ impl PartialEq for BloomNode {
     fn eq(&self, other: &Self) -> bool {
         self.left_child == other.left_child
             && self.right_child == other.right_child
-            && self.bloom_filter == other.bloom_filter
             && self.tax_id == other.tax_id
             && self.mapped_reads == other.mapped_reads
     }
@@ -142,14 +144,44 @@ impl BloomTree<HashSeed, HashSeed> {
     /// # Returns
     /// - A new BloomNode, representing a to-be leaf node.
     fn init_leaf_node(&self, genome: &file_parser::DNASequence) -> Box<BloomNode> {
+        println!("making leaf node");
         let mut new_leaf_node: Box<BloomNode> = self.make_bloom_node(genome.id.clone());
         // map kmers into the bloom filter.
-        for kmer in &genome.kmers {
-            new_leaf_node.bloom_filter.insert(&kmer);
+        {
+            println!("opening bloom filter - adding kmers - 1");
+            let mut b4_new_leaf_node = self
+                .bf_cache
+                .get_filter(&new_leaf_node.bloom_filter_path)
+                .unwrap();
+            println!("opening bloom filter - adding kmers - 2");
+            let mut bf_new_leaf_node = b4_new_leaf_node.write().unwrap();
+            println!("opening bloom filter - adding kmers - 3");
+
+            for kmer in &genome.kmers {
+                bf_new_leaf_node.insert(&kmer);
+            }
         }
+
+        println!("opening bloom filter - adding kmers - 4");
         log::debug!("(bloom tree; init()) Adding {}", genome.id);
         return new_leaf_node;
     }
+
+    // pub fn get_writable_bloom_filter(
+    //     &self,
+    //     node: &BloomNode,
+    // ) -> Result<RwLockWriteGuard<BloomFilter>, PoisonError<RwLockWriteGuard<BloomFilter>>> {
+    //     let bf_node_arc = self.bf_cache.get_filter(&node.bloom_filter_path).unwrap();
+    //     return bf_node_arc;
+    // }
+
+    // pub fn get_readable_bloom_filter(
+    //     &self,
+    //     node: &BloomNode,
+    // ) -> Result<RwLockReadGuard<BloomFilter>, PoisonError<RwLockReadGuard<BloomFilter>>> {
+    //     let bf_node_arc = self.bf_cache.get_filter(&node.bloom_filter_path).unwrap();
+    //     return bf_node_arc.read();
+    // }
 
     /// Adds a BloomNode to a given BloomTree.
     ///
@@ -174,9 +206,29 @@ impl BloomTree<HashSeed, HashSeed> {
         node: Box<BloomNode>,
     ) -> Box<BloomNode> {
         if let (Some(left), Some(right)) = (&current_node.left_child, &current_node.right_child) {
-            current_node.bloom_filter.union(&node.bloom_filter);
-            let right_distance = right.bloom_filter.distance(&node.bloom_filter);
-            let left_distance = left.bloom_filter.distance(&node.bloom_filter);
+            let right_distance;
+            let left_distance;
+            {
+                // get BFs
+                let b4_current_node = self
+                    .bf_cache
+                    .get_filter(&current_node.bloom_filter_path)
+                    .unwrap();
+                let mut bf_current_node = b4_current_node.write().unwrap();
+                //
+                let b4_node = self.bf_cache.get_filter(&node.bloom_filter_path).unwrap();
+                let bf_node = b4_node.read().unwrap();
+                //
+                let b4_left = self.bf_cache.get_filter(&left.bloom_filter_path).unwrap();
+                let mut bf_left = b4_left.read().unwrap();
+                //
+                let b4_right = self.bf_cache.get_filter(&right.bloom_filter_path).unwrap();
+                let mut bf_right = b4_right.read().unwrap();
+                // check BFs
+                bf_current_node.union(&bf_node);
+                right_distance = bf_right.distance(&bf_node);
+                left_distance = bf_left.distance(&bf_node);
+            }
             if right_distance < left_distance {
                 current_node.right_child =
                     Some(self.add_to_tree(current_node.right_child.unwrap(), node));
@@ -211,15 +263,41 @@ impl BloomTree<HashSeed, HashSeed> {
         let mut rng = rand::thread_rng();
         let n2: u16 = rng.gen();
         let node_name = "Internal Node".to_string() + "_" + &n2.to_string();
+        println!("making internal node");
         let mut new_internal_node = self.make_bloom_node(node_name.clone());
-
-        // Combine children's bloom filters
-        new_internal_node
-            .bloom_filter
-            .union(&current_node.bloom_filter);
-        new_internal_node.bloom_filter.union(&new_node.bloom_filter);
+        println!("Doing bloomm shit");
+        {
+            // get bfs
+            println!("Doing bloomm shit - 1");
+            let b4_new_node = self
+                .bf_cache
+                .get_filter(&new_node.bloom_filter_path)
+                .unwrap();
+            let bf_new_node = b4_new_node.read().unwrap();
+            //
+            println!("Doing bloomm shit - 2");
+            let b4_new_internal_node = self
+                .bf_cache
+                .get_filter(&new_internal_node.bloom_filter_path)
+                .unwrap();
+            let mut bf_new_internal_node = b4_new_internal_node.write().unwrap();
+            //
+            println!("Doing bloomm shit - 3");
+            let b4_current_node = self
+                .bf_cache
+                .get_filter(&current_node.bloom_filter_path)
+                .unwrap();
+            let bf_current_node = b4_current_node.read().unwrap();
+            // Combine children's bloom filters
+            println!("Doing bloomm shit - 4");
+            bf_new_internal_node.union(&bf_current_node);
+            println!("Doing bloomm shit - 5");
+            bf_new_internal_node.union(&bf_new_node);
+        }
+        println!("Doing bloomm shit - 6");
         new_internal_node.left_child = Some(current_node);
         new_internal_node.right_child = Some(new_node);
+
         return new_internal_node;
     }
 
@@ -283,23 +361,19 @@ impl BloomTree<HashSeed, HashSeed> {
         let full_bloom_filter_path = self.directory.clone().unwrap().join(&bloom_filter_path);
 
         // create and save the bloom filter.
-        let bloom_filter = create_bloom_filter(self.hash_states.clone(), full_bloom_filter_path);
+        let bloom_filter =
+            create_bloom_filter(self.hash_states.clone(), full_bloom_filter_path.clone());
 
         // Cache the loaded Bloom filter
-        self.bf_cache.add_filter(&bloom_filter_path, bloom_filter);
-
-        // test cache
-        let bf = self.bf_cache.get_filter(&bloom_filter_path);
-        println!("{:?}", bf);
+        self.bf_cache
+            .add_filter(&full_bloom_filter_path, bloom_filter);
 
         // make node.
-        let bloomnode = BloomNode::new(
-            self.hash_states.clone(),
-            Some(nodeid.clone()),
-            bloom_filter_path,
-        );
-
-        Box::new(bloomnode)
+        let bloomnode = BloomNode::new(Some(nodeid.clone()), full_bloom_filter_path);
+        println!("MAKE  BLLOOM CNOODE (b4)");
+        let boxed_node = Box::new(bloomnode);
+        println!("MAKE  BLLOOM CNOODE (after)");
+        boxed_node
     }
 }
 
@@ -314,18 +388,13 @@ impl BloomNode {
     /// # Returns
     ///
     /// A new instance of `BloomNode`.
-    fn new(
-        hash_states: (HashSeed, HashSeed),
-        tax_id: Option<String>,
-        bloom_filter_path: PathBuf,
-    ) -> Self {
+    fn new(tax_id: Option<String>, bloom_filter_path: PathBuf) -> Self {
         BloomNode {
             // initializes random hash state to use for the whole tree
             left_child: None,
             right_child: None,
             tax_id,
             bloom_filter_path: bloom_filter_path.clone(),
-            bloom_filter: create_bloom_filter(hash_states, bloom_filter_path.clone()),
             mapped_reads: 0,
         }
     }

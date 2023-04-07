@@ -23,17 +23,21 @@ impl BloomFilterCache {
     }
 
     pub fn get_filter(&self, key: &PathBuf) -> Option<Arc<RwLock<BloomFilter>>> {
+        println!("trying to get filter: {:?}", key.to_path_buf());
         let mut cache_lock = self.cache.write().unwrap();
         if let Some(filter) = cache_lock.get(key) {
             Some(filter.clone())
         } else {
             let filter_path = Path::new(key);
             if filter_path.exists() {
+                println!("the following is a saved file: {:?}", filter_path);
                 let filter: BloomFilter = BloomFilter::load_from_file(&filter_path);
+                println!("file loded");
                 let arc_filter = Arc::new(RwLock::new(filter));
                 cache_lock.put(key.to_path_buf(), arc_filter.clone());
                 Some(arc_filter)
             } else {
+                println!("the following is a no-go: {:?}", key.to_path_buf());
                 None
             }
         }
