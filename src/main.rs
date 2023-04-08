@@ -41,6 +41,12 @@ enum Commands {
         /// Size of the kmer to use; use with caution!
         #[arg(required = false, default_value_t = 20, short, long)]
         kmer_size: usize,
+        /// Size of the LRU cache. (how many BFs in memory at once.)
+        #[arg(required = false, default_value_t = 10, short, long)]
+        cache_size: usize,
+        /// False positive rate per bloom filter. (impacts size of the bloom filter)
+        #[arg(required = false, default_value_t = 0.001, short, long)]
+        false_pos_rate: f32,
     },
     /// Queries a set of reads. (ran after building the bloom tree)
     Query {
@@ -57,11 +63,14 @@ enum Commands {
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
         /// Size of the read blocks (how many reads in mem at a time).
-        #[arg(required = false, default_value_t = usize::MAX, short, long)]
+        #[arg(required = false, default_value_t = 1000, short, long)]
         read_block_size: usize,
         /// Filtering theshold. (Fraction of kmers needed to pass)
         #[arg(required = false, default_value_t = 1.0, short, long)]
         cuttoff_threshold: f32,
+        /// Size of the LRU cache. (how many BFs in memory at once.)
+        #[arg(required = false, default_value_t = 10, short, long)]
+        cache_size: usize,
     },
 }
 
@@ -80,6 +89,8 @@ fn main() {
             db_path,
             threads,
             kmer_size,
+            cache_size,
+            false_pos_rate,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -102,7 +113,12 @@ fn main() {
 
             // build: bloom trees
             print!("Building the SBT... \n");
-            let mut bloom_tree = bloom_tree::BloomTree::new(*kmer_size, &PathBuf::from(db_path));
+            let mut bloom_tree = bloom_tree::BloomTree::new(
+                *kmer_size,
+                &PathBuf::from(db_path),
+                *cache_size,
+                *false_pos_rate,
+            );
             while !genome_block.is_empty() {
                 for genome in genome_block {
                     bloom_tree.insert(&genome);
@@ -122,12 +138,14 @@ fn main() {
             threads,
             read_block_size,
             cuttoff_threshold,
+            cache_size,
         } => {
             // initial message to show used parameters.
             log::info!(
                 "\n Query input- \n\treads:{} \n\tthreads:{}, \n\tout:{}, \n\tdb_path:{}, \n\tthreads:{} \n\tcuttoff_threshold:{} \n",
                 reads, threads, out, db_path, threads, cuttoff_threshold
             );
+
             // number of threads to run
             rayon::ThreadPoolBuilder::new()
                 .num_threads(*threads)
@@ -135,7 +153,8 @@ fn main() {
                 .unwrap();
             // load bloom tree from disk
             let full_db_path: &Path = Path::new(db_path);
-            let mut bloom_tree: bloom_tree::BloomTree = bloom_tree::BloomTree::load(full_db_path);
+            let mut bloom_tree: bloom_tree::BloomTree =
+                bloom_tree::BloomTree::load(full_db_path, *cache_size);
             // parse reads
             print!("Querying reads... \n");
             let mut readqueue =
