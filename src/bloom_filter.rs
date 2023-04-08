@@ -59,14 +59,16 @@ pub fn create_bloom_filter(
     hash_states: (HashSeed, HashSeed),
     full_bf_path: PathBuf,
     false_pos_rate: f32,
+    largest_expected_genome: u32,
 ) -> BloomFilter {
-    let expected_num_items: u32 = 1_000_000;
+    //let expected_num_items: u32 = 1_000_000;
     log::debug!(
         "(Building BF) number of items expected: {}\n",
-        expected_num_items
+        largest_expected_genome
     );
     // instantiate a BloomFilter
-    let mut filter = BloomFilter::with_rate(false_pos_rate, expected_num_items, hash_states);
+    // The number of items is at most the length of the genome (largest_expected_genome == item count)
+    let mut filter = BloomFilter::with_rate(false_pos_rate, largest_expected_genome, hash_states);
     filter.file_path = Some(full_bf_path);
 
     return filter;

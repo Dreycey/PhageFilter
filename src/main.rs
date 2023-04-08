@@ -47,6 +47,9 @@ enum Commands {
         /// False positive rate per bloom filter. (impacts size of the bloom filter)
         #[arg(required = false, default_value_t = 0.001, short, long)]
         false_pos_rate: f32,
+        /// Largest expected genome/chromosome size. (impacts size of the bloom filter)
+        #[arg(required = false, default_value_t = 1000000, short, long)]
+        largest_genome: u32,
     },
     /// Queries a set of reads. (ran after building the bloom tree)
     Query {
@@ -91,6 +94,7 @@ fn main() {
             kmer_size,
             cache_size,
             false_pos_rate,
+            largest_genome,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -118,6 +122,7 @@ fn main() {
                 &PathBuf::from(db_path),
                 *cache_size,
                 *false_pos_rate,
+                *largest_genome,
             );
             while !genome_block.is_empty() {
                 for genome in genome_block {

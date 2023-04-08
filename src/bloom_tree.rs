@@ -43,6 +43,7 @@ pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
 
     /// bloom filter params.
     false_pos_rate: f32,
+    largest_expected_genome: u32,
 
     /// Size of kmers in the bloom filters
     pub(crate) kmer_size: usize,
@@ -106,6 +107,7 @@ impl BloomTree<HashSeed, HashSeed> {
         directory: &PathBuf,
         cache_size: usize,
         false_pos_rate: f32,
+        largest_expected_genome: u32,
     ) -> Self {
         std::fs::create_dir_all(directory).unwrap();
         BloomTree {
@@ -113,6 +115,7 @@ impl BloomTree<HashSeed, HashSeed> {
             bf_cache: BloomFilterCache::new(cache_size),
             false_pos_rate,
             kmer_size,
+            largest_expected_genome,
             // initializes random hash state to use for the whole tree
             hash_states: (HashSeed::new(), HashSeed::new()),
             directory: Some(directory.to_path_buf()),
@@ -353,6 +356,7 @@ impl BloomTree<HashSeed, HashSeed> {
             self.hash_states.clone(),
             full_bloom_filter_path.clone(),
             self.false_pos_rate,
+            self.largest_expected_genome,
         );
 
         // Cache the loaded Bloom filter
