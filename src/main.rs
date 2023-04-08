@@ -51,6 +51,21 @@ enum Commands {
         #[arg(required = false, default_value_t = 1000000, short, long)]
         largest_genome: u32,
     },
+    /// Adds genomes to an already built BloomFilter.
+    Build_Add {
+        /// Path to genomes file or directory. (Fasta)
+        #[arg(required = true, short, long)]
+        genomes: String,
+        /// Path to store the tree to disk.
+        #[arg(required = true, short, long)]
+        db_path: String,
+        /// Number of threads to use to build the bloom tree.
+        #[arg(required = false, default_value_t = 4, short, long)]
+        threads: usize,
+        /// Size of the LRU cache. (how many BFs in memory at once.)
+        #[arg(required = false, default_value_t = 10, short, long)]
+        cache_size: usize,
+    },
     /// Queries a set of reads. (ran after building the bloom tree)
     Query {
         /// Path to read file or directory of reads. (Fasta or Fastq, or dirs with both)
@@ -67,10 +82,10 @@ enum Commands {
         threads: usize,
         /// Size of the read blocks (how many reads in mem at a time).
         #[arg(required = false, default_value_t = 1000, short, long)]
-        read_block_size: usize,
+        block_size_reads: usize,
         /// Filtering theshold. (Fraction of kmers needed to pass)
         #[arg(required = false, default_value_t = 1.0, short, long)]
-        cuttoff_threshold: f32,
+        filter_threshold: f32,
         /// Size of the LRU cache. (how many BFs in memory at once.)
         #[arg(required = false, default_value_t = 10, short, long)]
         cache_size: usize,
@@ -136,13 +151,56 @@ fn main() {
             bloom_tree.save(save_dir);
             print!("Finished. \n");
         }
+        Commands::Build_Add {
+            genomes,
+            db_path,
+            threads,
+            cache_size,
+        } => {
+            // initial message to show used parameters.
+            log::info!(
+                "\n Build input-  \n\tdb:{} \n\tthreads:{}\n",
+                db_path,
+                threads
+            );
+            // number of threads to run
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(*threads)
+                .build_global()
+                .unwrap();
+
+            // build: bloom trees
+            print!("Adding new genomes to the SBT... \n");
+
+            // load bloom tree from disk
+            let full_db_path: &Path = Path::new(db_path);
+            let mut bloom_tree: bloom_tree::BloomTree =
+                bloom_tree::BloomTree::load(full_db_path, *cache_size);
+
+            // obtain genomes from fasta/fastq files
+            let mut genome_queue: file_parser::ReadQueue =
+                file_parser::ReadQueue::new(&genomes, 1, bloom_tree.kmer_size);
+            let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
+
+            while !genome_block.is_empty() {
+                for genome in genome_block {
+                    bloom_tree.insert(&genome);
+                }
+                genome_block = genome_queue.next_block();
+            }
+
+            // save tree to disk
+            let save_dir = Path::new(db_path);
+            bloom_tree.save(save_dir);
+            print!("Finished. \n");
+        }
         Commands::Query {
             reads,
             out,
             db_path,
             threads,
-            read_block_size,
-            cuttoff_threshold,
+            block_size_reads,
+            filter_threshold: cuttoff_threshold,
             cache_size,
         } => {
             // initial message to show used parameters.
@@ -163,7 +221,7 @@ fn main() {
             // parse reads
             print!("Querying reads... \n");
             let mut readqueue =
-                file_parser::ReadQueue::new(&reads, *read_block_size, bloom_tree.kmer_size);
+                file_parser::ReadQueue::new(&reads, *block_size_reads, bloom_tree.kmer_size);
             // Check for presence in the bloom tree; block-by-block
             let mut read_block: Vec<file_parser::DNASequence> = readqueue.next_block();
             while !read_block.is_empty() {
