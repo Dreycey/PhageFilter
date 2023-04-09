@@ -9,24 +9,15 @@ use crate::bloom_filter::hasher::HashSeed;
 /// ```rust
 /// let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
 /// ```
-use crate::bloom_filter::{create_bloom_filter, BloomFilter, DistanceChecker, ASMS};
-use crate::cache::BloomFilterCache;
+use crate::bloom_filter::{create_bloom_filter, DistanceChecker, ASMS};
+use crate::cache::{BFLruCache, BloomFilterCache};
 use crate::file_parser;
-use either::Either;
-use lru::LruCache;
 use rand::Rng;
-use rayon::string;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::PoisonError;
-use std::sync::RwLock;
-use std::sync::RwLockReadGuard;
-use std::sync::RwLockWriteGuard;
 
 const TREE_FILENAME: &'static str = "tree.bin";
 
@@ -35,7 +26,7 @@ pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
     pub(crate) root: Option<Box<BloomNode>>,
 
     #[serde(skip, default = "create_cache")]
-    pub(crate) bf_cache: BloomFilterCache,
+    pub(crate) bf_cache: Box<dyn BloomFilterCache>,
 
     /// Path to the directory containing the tree and corresponding bloom filters
     #[serde(skip)]
@@ -65,9 +56,9 @@ pub(crate) struct BloomNode {
     pub(crate) mapped_reads: usize,
 }
 
-fn create_cache() -> BloomFilterCache {
+fn create_cache() -> Box<BFLruCache> {
     // TODO: add the ability to change the size of the cache.
-    BloomFilterCache::new(1)
+    Box::new(BFLruCache::new(1))
 }
 
 /// RandomState doesn't support equality comparisons so we ignore the hash_states when comparing BloomTrees.
@@ -105,14 +96,14 @@ impl BloomTree<HashSeed, HashSeed> {
     pub fn new(
         kmer_size: usize,
         directory: &PathBuf,
-        cache_size: usize,
+        bf_cache: BFLruCache,
         false_pos_rate: f32,
         largest_expected_genome: u32,
     ) -> Self {
         std::fs::create_dir_all(directory).unwrap();
         BloomTree {
             root: None,
-            bf_cache: BloomFilterCache::new(cache_size),
+            bf_cache: Box::new(bf_cache),
             false_pos_rate,
             kmer_size,
             largest_expected_genome,
@@ -157,10 +148,10 @@ impl BloomTree<HashSeed, HashSeed> {
     /// # Returns
     /// - A new BloomNode, representing a to-be leaf node.
     fn init_leaf_node(&self, genome: &file_parser::DNASequence) -> Box<BloomNode> {
-        let mut new_leaf_node: Box<BloomNode> = self.make_bloom_node(genome.id.clone());
+        let new_leaf_node: Box<BloomNode> = self.make_bloom_node(genome.id.clone());
         // map kmers into the bloom filter.
         {
-            let mut b4_new_leaf_node = self
+            let b4_new_leaf_node = self
                 .bf_cache
                 .get_filter(&new_leaf_node.bloom_filter_path)
                 .unwrap();
@@ -322,7 +313,7 @@ impl BloomTree<HashSeed, HashSeed> {
     ///
     /// # Panics
     /// - if the directory does not exist.
-    pub fn load(directory: &Path, cache_size: usize) -> BloomTree {
+    pub fn load(directory: &Path, bf_cache: BFLruCache) -> BloomTree {
         // panics if it doesn't exist
         if !directory.is_dir() {
             panic!("Must provide a directory in where a tree has been stored");
@@ -341,7 +332,7 @@ impl BloomTree<HashSeed, HashSeed> {
         // save path to the directory containing the serialized tree.
         deserialized_tree.directory = Some(directory.to_path_buf());
         // update cache information
-        deserialized_tree.bf_cache = BloomFilterCache::new(cache_size);
+        deserialized_tree.bf_cache = Box::new(bf_cache);
 
         return deserialized_tree;
     }
@@ -409,33 +400,55 @@ impl BloomNode {
 
 //     #[test]
 //     fn test_empty_tree_insert() {
+//         // initialization states.
 //         let kmer_size = 5;
-//         let mut tree = BloomTree::new(kmer_size);
+//         let directory = PathBuf::from("tmp_testing/");
+//         let cache_size = 5;
+//         let false_positive_rate = 0.001;
+//         let largest_expected_genome = 1000;
+
+//         // creating tree.
+//         let mut tree = BloomTree::new(
+//             kmer_size,
+//             &directory,
+//             cache_size,
+//             false_positive_rate,
+//             largest_expected_genome,
+//         );
+
+//         // create a DNA sequence.
 //         let record_id = "";
 //         let record = file_parser::DNASequence::new(
 //             "ATCAG".as_bytes().to_vec(),
 //             record_id.to_string(),
 //             kmer_size,
 //         );
+
+//         // create a BloomNode
 //         let mut expected_root = Box::new(BloomNode::new(
-//             tree.hash_states.clone(),
 //             Some(record_id.to_string()),
+//             directory.join(record_id.to_string()),
 //         ));
 
-//         // The root's bloom filter should just be the bloom filter you get from the record
-//         expected_root
-//             .bloom_filter
-//             .union(&tree.init_leaf_node(&record).bloom_filter);
+//         // // The root's bloom filter should just be the bloom filter you get from the record
+//         // expected_root
+//         //     .bloom_filter
+//         //     .union(&tree.init_leaf_node(&record).bloom_filter);
 
-//         let expected_tree = BloomTree {
-//             root: Some(expected_root),
-//             kmer_size: kmer_size,
-//             hash_states: tree.hash_states.clone(),
-//         };
+//         // // create a BloomTree manually.
+//         // let expected_tree = BloomTree {
+//         //     root: Some(expected_root),
+//         //     directory: directory,
+//         //     kmer_size: kmer_size,
+//         //     hash_states: tree.hash_states.clone(),
+//         //     bf_cache: BloomFilterCache::new(cache_size),
+//         //     false_pos_rate: false_positive_rate,
+//         //     largest_expected_genome,
+//         // };
 
-//         tree = tree.insert(&record);
+//         // tree = tree.insert(&record);
 
-//         assert_eq!(tree, expected_tree);
+//         // assert_eq!(tree, expected_tree);
 //     }
 // }
 

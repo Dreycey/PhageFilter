@@ -2,7 +2,7 @@ use bio::alphabets::dna;
 use bio::io::{fasta, fastq};
 use rayon::prelude::*;
 use std::fs;
-use std::fs::{metadata, File};
+use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 

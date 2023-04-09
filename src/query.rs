@@ -38,7 +38,6 @@ fn query_passes(
     bloom_filter: &BloomFilter,
     read: &file_parser::DNASequence,
     threshold: f32,
-    kmer_size: usize,
 ) -> bool {
     let num_matches = read
         .kmers
@@ -98,7 +97,7 @@ pub(crate) fn query_batch(
 /// # Panics
 /// - N/A
 fn _query_batch(
-    mut bloom_tree: &BloomTree,
+    bloom_tree: &BloomTree,
     mut bloom_node: Box<BloomNode>,
     read_set: &[&file_parser::DNASequence],
     threshold: f32,
@@ -113,7 +112,7 @@ fn _query_batch(
 
     let pass: Vec<&file_parser::DNASequence> = read_set
         .par_iter()
-        .filter(|&&read| query_passes(&bf_bloom_node, read, threshold, kmer_size))
+        .filter(|&&read| query_passes(&bf_bloom_node, read, threshold))
         .map(|&read| read) // Use map() to get the right item type
         .collect();
 
@@ -217,6 +216,11 @@ mod tests {
 
     #[test]
     fn test_query_passes() {
+        // initialization states.
+        let directory = PathBuf::from("tmp_testing/");
+        let cache_size = 5;
+        let false_positive_rate = 0.001;
+        let largest_expected_genome = 1000;
         let kmer_size = 3;
         // All kmers must match
         let all_threshold = 1.0;
@@ -239,23 +243,26 @@ mod tests {
             kmer_size,
         );
 
-        let tree = bloom_tree::create_bloom_tree(vec![genome], &kmer_size);
-        let root = tree.root.unwrap();
+        let mut tree = bloom_tree::BloomTree::new(
+            kmer_size,
+            &directory,
+            cache_size,
+            false_positive_rate,
+            largest_expected_genome,
+        );
+        tree.insert(&genome);
 
-        assert!(query_passes(&root, &read_same, all_threshold, kmer_size));
-        assert!(!query_passes(
-            &root,
-            &read_different,
-            all_threshold,
-            kmer_size,
-        ));
-        assert!(query_passes(&root, &read_same, no_threshold, kmer_size));
-        assert!(query_passes(
-            &root,
-            &read_different,
-            no_threshold,
-            kmer_size,
-        ));
+        // bloom filter
+        let b4_bloomfilter = tree
+            .bf_cache
+            .get_filter(&tree.root.unwrap().bloom_filter_path)
+            .unwrap();
+        let bloomfilter = b4_bloomfilter.read().unwrap();
+
+        assert!(query_passes(&bloomfilter, &read_same, all_threshold));
+        assert!(!query_passes(&bloomfilter, &read_different, all_threshold));
+        assert!(query_passes(&bloomfilter, &read_same, no_threshold));
+        assert!(query_passes(&bloomfilter, &read_different, no_threshold));
     }
 }
 //     #[test]

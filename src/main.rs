@@ -52,7 +52,7 @@ enum Commands {
         largest_genome: u32,
     },
     /// Adds genomes to an already built BloomFilter.
-    Build_Add {
+    Add {
         /// Path to genomes file or directory. (Fasta)
         #[arg(required = true, short, long)]
         genomes: String,
@@ -81,7 +81,7 @@ enum Commands {
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
         /// Size of the read blocks (how many reads in mem at a time).
-        #[arg(required = false, default_value_t = 1000, short, long)]
+        #[arg(required = false, default_value_t = 100, short, long)]
         block_size_reads: usize,
         /// Filtering theshold. (Fraction of kmers needed to pass)
         #[arg(required = false, default_value_t = 1.0, short, long)]
@@ -130,12 +130,15 @@ fn main() {
                 file_parser::ReadQueue::new(&genomes, 1, *kmer_size);
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
+            // create a new cache
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size);
+
             // build: bloom trees
             print!("Building the SBT... \n");
             let mut bloom_tree = bloom_tree::BloomTree::new(
                 *kmer_size,
                 &PathBuf::from(db_path),
-                *cache_size,
+                bloomfilter_cache,
                 *false_pos_rate,
                 *largest_genome,
             );
@@ -151,7 +154,7 @@ fn main() {
             bloom_tree.save(save_dir);
             print!("Finished. \n");
         }
-        Commands::Build_Add {
+        Commands::Add {
             genomes,
             db_path,
             threads,
@@ -172,10 +175,13 @@ fn main() {
             // build: bloom trees
             print!("Adding new genomes to the SBT... \n");
 
+            // create a new cache
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size);
+
             // load bloom tree from disk
             let full_db_path: &Path = Path::new(db_path);
             let mut bloom_tree: bloom_tree::BloomTree =
-                bloom_tree::BloomTree::load(full_db_path, *cache_size);
+                bloom_tree::BloomTree::load(full_db_path, bloomfilter_cache);
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
@@ -214,22 +220,30 @@ fn main() {
                 .num_threads(*threads)
                 .build_global()
                 .unwrap();
+
+            // create a new cache
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size);
+
             // load bloom tree from disk
             let full_db_path: &Path = Path::new(db_path);
             let mut bloom_tree: bloom_tree::BloomTree =
-                bloom_tree::BloomTree::load(full_db_path, *cache_size);
+                bloom_tree::BloomTree::load(full_db_path, bloomfilter_cache);
+
             // parse reads
             print!("Querying reads... \n");
             let mut readqueue =
                 file_parser::ReadQueue::new(&reads, *block_size_reads, bloom_tree.kmer_size);
+
             // Check for presence in the bloom tree; block-by-block
             let mut read_block: Vec<file_parser::DNASequence> = readqueue.next_block();
             while !read_block.is_empty() {
                 bloom_tree = query::query_batch(bloom_tree, &read_block, *cuttoff_threshold);
                 read_block = readqueue.next_block();
             }
+
             // open output file to write to
             let mut out_file = File::create(out).unwrap();
+
             // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
             query::save_leaf_counts(&bloom_tree.root.unwrap(), &mut out_file);
             print!("Finished. \n");

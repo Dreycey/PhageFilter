@@ -45,7 +45,6 @@ mod hash_iter;
 pub mod hasher;
 use hasher::HashSeed;
 use serde::{Deserialize, Serialize};
-use std::any::TypeId;
 use std::cmp::{max, min};
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
@@ -103,8 +102,10 @@ impl<R, S> BloomFilter<R, S> {
 impl<R, S> Drop for BloomFilter<R, S> {
     fn drop(&mut self) {
         let bloomfilter_inner = self.as_bloom_filter();
-        let path = bloomfilter_inner.file_path.as_ref().unwrap().as_path();
-        bloomfilter_inner.save_to_file(path);
+        if bloomfilter_inner.file_path.is_some() {
+            let path = bloomfilter_inner.file_path.as_ref().unwrap().as_path();
+            bloomfilter_inner.save_to_file(path);
+        }
     }
 }
 
@@ -348,7 +349,7 @@ mod tests {
 
         BloomFilter {
             bits,
-            num_hashes: 0,
+            num_hashes: 2,
             hash_builder_one: state.clone(),
             hash_builder_two: state.clone(),
             file_path: None,
