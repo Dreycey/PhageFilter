@@ -1,0 +1,56 @@
+name: Rust Coverage
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+
+jobs:
+    coverage:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v2
+
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  profile: minimal
+                  toolchain: nightly
+                  override: true
+
+            - name: Install cargo-tarpaulin
+              run: cargo install cargo-tarpaulin
+
+            - name: Run coverage
+              run: cargo +nightly tarpaulin --out Xml
+
+            - name: Upload coverage to GitHub Actions
+              uses: actions/upload-artifact@v2
+              with:
+                  name: coverage
+                  path: cobertura.xml
+
+            - name: Update README badge
+              run: |
+                  coverage_percent=$(grep -oP 'line-rate="\K[^"]*' cobertura.xml)
+                  coverage_color="red"
+                  if (( $(echo "$coverage_percent >= 0.9" | bc -l) )); then
+                    coverage_color="brightgreen"
+                  elif (( $(echo "$coverage_percent >= 0.75" | bc -l) )); then
+                    coverage_color="green"
+                  elif (( $(echo "$coverage_percent >= 0.5" | bc -l) )); then
+                    coverage_color="yellow"
+                  elif (( $(echo "$coverage_percent >= 0.25" | bc -l) )); then
+                    coverage_color="orange"
+                  fi
+                  sed -i "s|badge-placeholder-red|${coverage_percent}_${coverage_color}|g" README.md
+                  git config --global user.name 'GitHub Actions'
+                  git config --global user.email 'actions@users.noreply.github.com'
+                  git add README.md
+                  git commit -m "Update coverage badge [skip ci]" || true
+                  git push || true
