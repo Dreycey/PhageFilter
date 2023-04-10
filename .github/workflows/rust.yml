@@ -57,14 +57,14 @@ jobs:
 
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              needs: test
-              steps:
-                - name: Read coverage file
-                  id: read_coverage_file
-                  run: echo "::set-output name=coverage::$(node -p 'JSON.stringify({coverage: require(process.env.GITHUB_WORKSPACE + "/target/debug/coverage/coverage.json")})')"
-                - name: Setup Node.js
-                  uses: actions/setup-node@v2
-                  with:
-                    node-version: "14"
-                - name: Install @actions/toolkit
-                  run: npm install @actions/toolkit
+        needs: test
+        steps:
+            - name: Read coverage file
+              id: read_coverage_file
+              run: echo "::set-output name=coverage::$(node -p 'JSON.stringify({coverage: require(process.env.GITHUB_WORKSPACE + "/target/debug/coverage/coverage.json")})')"
+            - name: Setup Node.js
+              uses: actions/setup-node@v2
+              with:
+                node-version: "14"
+            - name: Install @actions/toolkit
+              run: npm install @actions/toolkit
