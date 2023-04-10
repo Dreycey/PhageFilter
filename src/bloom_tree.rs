@@ -392,65 +392,108 @@ impl BloomNode {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::file_parser::RecordTypes;
-//     use bio::io::fasta;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bloom_filter::BloomFilter;
+    use crate::cache;
+    use crate::file_parser::RecordTypes;
+    use bio::io::fasta;
+    use std::fs;
 
-//     #[test]
-//     fn test_empty_tree_insert() {
-//         // initialization states.
-//         let kmer_size = 5;
-//         let directory = PathBuf::from("tmp_testing/");
-//         let cache_size = 5;
-//         let false_positive_rate = 0.001;
-//         let largest_expected_genome = 1000;
+    fn get_tmp_dir() -> std::path::PathBuf {
+        PathBuf::from("tmp_testing/")
+    }
 
-//         // creating tree.
-//         let mut tree = BloomTree::new(
-//             kmer_size,
-//             &directory,
-//             cache_size,
-//             false_positive_rate,
-//             largest_expected_genome,
-//         );
+    struct TestContext {}
 
-//         // create a DNA sequence.
-//         let record_id = "";
-//         let record = file_parser::DNASequence::new(
-//             "ATCAG".as_bytes().to_vec(),
-//             record_id.to_string(),
-//             kmer_size,
-//         );
+    impl TestContext {
+        fn setup() -> TestContext {
+            println!("Setting up the test context");
+            fs::create_dir(get_tmp_dir()).unwrap();
+            TestContext {}
+        }
 
-//         // create a BloomNode
-//         let mut expected_root = Box::new(BloomNode::new(
-//             Some(record_id.to_string()),
-//             directory.join(record_id.to_string()),
-//         ));
+        fn get_tmp_dir(&self) -> std::path::PathBuf {
+            PathBuf::from("tmp_testing/")
+        }
 
-//         // // The root's bloom filter should just be the bloom filter you get from the record
-//         // expected_root
-//         //     .bloom_filter
-//         //     .union(&tree.init_leaf_node(&record).bloom_filter);
+        fn teardown(&self) -> () {
+            println!("Tearing down the test context");
+            fs::remove_dir_all(get_tmp_dir()).unwrap();
+        }
+    }
 
-//         // // create a BloomTree manually.
-//         // let expected_tree = BloomTree {
-//         //     root: Some(expected_root),
-//         //     directory: directory,
-//         //     kmer_size: kmer_size,
-//         //     hash_states: tree.hash_states.clone(),
-//         //     bf_cache: BloomFilterCache::new(cache_size),
-//         //     false_pos_rate: false_positive_rate,
-//         //     largest_expected_genome,
-//         // };
+    fn create_bloom_filter(false_positive_rate: f32, largest_expected_genome: u32) -> BloomFilter {
+        let hash_states = (HashSeed::new(), HashSeed::new());
+        BloomFilter::with_rate(false_positive_rate, largest_expected_genome, hash_states)
+    }
 
-//         // tree = tree.insert(&record);
+    #[test]
+    fn test_empty_tree_insert() {
+        // setup context
+        let context = TestContext::setup();
 
-//         // assert_eq!(tree, expected_tree);
-//     }
-// }
+        // initialization states.
+        let kmer_size = 5;
+        let directory = context.get_tmp_dir();
+        let cache_size = 5;
+        let false_positive_rate = 0.001;
+        let largest_expected_genome = 1000;
+        assert!(directory.exists());
+
+        // create a DNA sequence.
+        let record_id = "tmp_bloom";
+        let record = file_parser::DNASequence::new(
+            "ATCAG".as_bytes().to_vec(),
+            record_id.to_string(),
+            kmer_size,
+        );
+
+        // create a new cache
+        let bloomfilter_cache = cache::BFLruCache::new(cache_size);
+
+        // (automated) creating tree.
+        let mut tree = BloomTree::new(
+            kmer_size,
+            &directory,
+            bloomfilter_cache,
+            false_positive_rate,
+            largest_expected_genome,
+        );
+        tree.insert(&record);
+
+        //(manual) create a bloom filter with the genome.
+        let mut expected_bf = BloomFilter::with_rate(
+            false_positive_rate,
+            largest_expected_genome,
+            tree.hash_states.clone(),
+        );
+        for kmer in record.kmers {
+            expected_bf.insert(&kmer);
+        }
+
+        //(manual) create corresponding BloomNode
+        let expected_root = BloomNode::new(Some(record_id.to_string()), directory.join(record_id));
+
+        // create a BloomTree manually.
+        let expected_tree = BloomTree {
+            root: Some(Box::new(expected_root)),
+            directory: Some(directory),
+            kmer_size: kmer_size,
+            hash_states: tree.hash_states.clone(),
+            bf_cache: Box::new(cache::BFLruCache::new(cache_size)),
+            false_pos_rate: false_positive_rate,
+            largest_expected_genome,
+        };
+
+        assert_eq!(tree, expected_tree);
+
+        //
+        // let tree = expected_tree;
+        // context.teardown();
+    }
+}
 
 //     #[test]
 //     fn test_one_elem_tree_insert() {
