@@ -41,7 +41,7 @@ jobs:
               run: |
                   coverage_percent=$(grep -oP 'line-rate="\K[^"]*' cobertura.xml | head -n 1)
                   coverage_percent=$(printf "%.2f" $(echo "$coverage_percent * 100" | bc -l))
-                  sed -i "s|https://img.shields.io/badge/coverage-*%25-brightgreen.svg?style=flat-square|https://img.shields.io/badge/coverage-${coverage_percent}%25-brightgreen.svg?style=flat-square|g" README.md
+                  sed -i "s|coverage-18.53%25-brightgreen|coverage-${coverage_percent}%25-brightgreen|g" README.md
                   git config --global user.name 'GitHub Actions'
                   git config --global user.email 'actions@users.noreply.github.com'
                   git add README.md
