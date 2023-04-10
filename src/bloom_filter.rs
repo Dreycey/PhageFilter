@@ -47,19 +47,29 @@ use hasher::HashSeed;
 use serde::{Deserialize, Serialize};
 use std::cmp::{max, min};
 use std::fmt::{Debug, Formatter};
+use std::fs::File;
 use std::hash::{BuildHasher, Hash};
+use std::io::Write;
+use std::io::{BufReader, BufWriter};
+use std::ops::Drop;
+use std::path::{Path, PathBuf};
 
-pub fn get_bloom_filter(hash_states: (HashSeed, HashSeed)) -> BloomFilter {
-    let max_genome_size: u32 = 1000000; // max size of phage genome. TODO: find this.
-    let expected_num_items: u32 = max_genome_size;
+pub fn create_bloom_filter(
+    hash_states: (HashSeed, HashSeed),
+    full_bf_path: PathBuf,
+    false_pos_rate: f32,
+    largest_expected_genome: u32,
+) -> BloomFilter {
+    //let expected_num_items: u32 = 1_000_000;
     log::debug!(
         "(Building BF) number of items expected: {}\n",
-        expected_num_items
+        largest_expected_genome
     );
-    // out of 100 items that are not inserted, expect 0.1 to return true for contain
-    let false_positive_rate: f32 = 0.001;
     // instantiate a BloomFilter
-    let filter = BloomFilter::with_rate(false_positive_rate, expected_num_items, hash_states);
+    // The number of items is at most the length of the genome (largest_expected_genome == item count)
+    let mut filter = BloomFilter::with_rate(false_pos_rate, largest_expected_genome, hash_states);
+    filter.file_path = Some(full_bf_path);
+
     return filter;
 }
 
@@ -80,6 +90,23 @@ pub struct BloomFilter<R = HashSeed, S = HashSeed> {
     num_hashes: u32,
     hash_builder_one: R,
     hash_builder_two: S,
+    file_path: Option<PathBuf>,
+}
+
+impl<R, S> BloomFilter<R, S> {
+    fn as_bloom_filter(&mut self) -> &mut BloomFilter {
+        unsafe { &mut *(self as *mut Self as *mut BloomFilter) }
+    }
+}
+
+impl<R, S> Drop for BloomFilter<R, S> {
+    fn drop(&mut self) {
+        let bloomfilter_inner = self.as_bloom_filter();
+        if bloomfilter_inner.file_path.is_some() {
+            let path = bloomfilter_inner.file_path.as_ref().unwrap().as_path();
+            bloomfilter_inner.save_to_file(path);
+        }
+    }
 }
 
 /// Equality for bloom filters is judged only using the bits field
@@ -112,6 +139,52 @@ impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
 }
 
 impl BloomFilter<HashSeed, HashSeed> {
+    pub fn load_from_file(bloom_filter_path: &Path) -> Self {
+        // Open the file at the given path
+        let file = File::open(bloom_filter_path).unwrap_or_else(|_| {
+            panic!("Failed to open Bloom filter file: {:?}", bloom_filter_path)
+        });
+
+        // Create a buffered reader for the file
+        let reader = BufReader::new(file);
+
+        // Deserialize the Bloom filter from the reader
+        let bloom_filter: BloomFilter = bincode::deserialize_from(reader).unwrap_or_else(|_| {
+            panic!(
+                "Failed to deserialize Bloom filter from file: {:?}",
+                bloom_filter_path
+            )
+        });
+
+        bloom_filter
+    }
+
+    pub fn save_to_file(&self, bloom_filter_path: &Path) {
+        // Create the file at the given path
+        let file = File::create(bloom_filter_path).unwrap_or_else(|_| {
+            panic!(
+                "Failed to create Bloom filter file: {:?}",
+                bloom_filter_path
+            )
+        });
+
+        // Create a buffered writer for the file
+        let mut writer = BufWriter::new(file);
+
+        // Serialize the Bloom filter into the writer
+        bincode::serialize_into(&mut writer, &self).unwrap_or_else(|_| {
+            panic!(
+                "Failed to serialize Bloom filter to file: {:?}",
+                bloom_filter_path
+            )
+        });
+
+        // Flush the writer to ensure the data is written to the file
+        writer.flush().unwrap_or_else(|_| {
+            panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path)
+        });
+    }
+
     /// Create a new BloomFilter with the specified number of bits,
     /// and hashes
     pub fn with_size(
@@ -126,6 +199,7 @@ impl BloomFilter<HashSeed, HashSeed> {
             num_hashes: num_hashes,
             hash_builder_one,
             hash_builder_two,
+            file_path: None, // TODO: update
         }
     }
 
@@ -275,9 +349,10 @@ mod tests {
 
         BloomFilter {
             bits,
-            num_hashes: 0,
+            num_hashes: 2,
             hash_builder_one: state.clone(),
             hash_builder_two: state.clone(),
+            file_path: None,
         }
     }
 

@@ -2,7 +2,7 @@ use bio::alphabets::dna;
 use bio::io::{fasta, fastq};
 use rayon::prelude::*;
 use std::fs;
-use std::fs::{metadata, File};
+use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
@@ -68,7 +68,7 @@ pub struct DNASequence {
 impl DNASequence {
     pub fn new(sequence: Vec<u8>, id: String, kmer_size: usize) -> DNASequence {
         DNASequence {
-            id: "".to_string(),
+            id,
             kmers: get_kmers(&sequence, &kmer_size),
         }
     }

@@ -1,4 +1,6 @@
 ![workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/rust.yml/badge.svg)
+![Coverage](https://img.shields.io/badge/coverage-35.15%25-brightgreen.svg?style=flat-square)
+
 ![phage filter logo](misc/PhageFilterLogo.png)
 
 # PhageFilter
@@ -37,14 +39,20 @@ The user can set the verbosity level. Below are different options for verbosity,
 
 ## Examples
 
-1. Build the sequence bloom tree
+1. Build the genomic sequence bloom tree (gSBT)
 
 ```bash
-cargo run -- build --genomes examples/genomes/viral_genome_dir/ --db-path tree -t 6
+cargo run -- build --genomes examples/genomes/viral_genome_dir/ --db-path tree
 ```
 
-2. Query examples
+2. Add genomes to an already built gSBT
 
 ```bash
-cargo run -- query -r examples/test_reads/simulated_reads.fa -o genomes_in_file.csv -d tree -c 1.0 -t 6
+cargo run -- add --genomes PATH/TO/OTHER/GENOMES/ --db-path tree/
+```
+
+3. Query examples
+
+```bash
+cargo run -- query -r examples/test_reads/ -o genomes_in_file.csv -d tree/ -f 1.0
 ```
