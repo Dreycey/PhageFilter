@@ -37,15 +37,16 @@ jobs:
 
             - name: Update README badge
               run: |
-                  coverage_percent=$(grep -oP 'line-rate="\K[^"]*' cobertura.xml)
+                  coverage_percent=$(grep -oP 'line-rate="\K[^"]*' cobertura.xml | head -n 1)
+                  coverage_percent=$(printf "%.2f" $(echo "$coverage_percent * 100" | bc -l))
                   coverage_color="red"
-                  if (( $(echo "$coverage_percent >= 0.9" | bc -l) )); then
+                  if (( $(echo "$coverage_percent >= 90" | bc -l) )); then
                     coverage_color="brightgreen"
-                  elif (( $(echo "$coverage_percent >= 0.75" | bc -l) )); then
+                  elif (( $(echo "$coverage_percent >= 75" | bc -l) )); then
                     coverage_color="green"
-                  elif (( $(echo "$coverage_percent >= 0.5" | bc -l) )); then
+                  elif (( $(echo "$coverage_percent >= 50" | bc -l) )); then
                     coverage_color="yellow"
-                  elif (( $(echo "$coverage_percent >= 0.25" | bc -l) )); then
+                  elif (( $(echo "$coverage_percent >= 25" | bc -l) )); then
                     coverage_color="orange"
                   fi
                   sed -i "s|badge-placeholder-red|${coverage_percent}_${coverage_color}|g" README.md
