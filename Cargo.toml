@@ -7,6 +7,9 @@ edition = "2021"
 codegen-units = 1
 lto = true
 
+[dev-dependencies]
+proptest = "1.0"
+
 [dependencies]
 bio = "*"
 bincode = "1.3.3"
@@ -19,3 +22,4 @@ serde = "1.0.147"
 clap-verbosity-flag = "2.0.0"
 log = "0.4.11"
 env_logger = "0.9.1"
+lru = "0.10.0"
