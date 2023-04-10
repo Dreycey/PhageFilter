@@ -68,7 +68,7 @@ pub struct DNASequence {
 impl DNASequence {
     pub fn new(sequence: Vec<u8>, id: String, kmer_size: usize) -> DNASequence {
         DNASequence {
-            id: "".to_string(),
+            id,
             kmers: get_kmers(&sequence, &kmer_size),
         }
     }
