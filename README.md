@@ -48,11 +48,11 @@ cargo run -- build --genomes examples/genomes/viral_genome_dir/ --db-path tree
 2. Add genomes to an already built gSBT
 
 ```bash
-cargo run -- build-add --genomes PATH/TO/OTHER/GENOMES/ --db-path tree/
+cargo run -- add --genomes PATH/TO/OTHER/GENOMES/ --db-path tree/
 ```
 
 3. Query examples
 
 ```bash
-cargo run -- query -r examples/test_reads/ -o genomes_in_file.csv -d tree -f 1.0
+cargo run -- query -r examples/test_reads/ -o genomes_in_file.csv -d tree/ -f 1.0
 ```
