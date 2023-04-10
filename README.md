@@ -1,4 +1,6 @@
 ![workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/rust.yml/badge.svg)
+[![Coverage Status](https://img.shields.io/badge/dynamic/json?color=green&label=coverage&query=$.tarpaulin[0].line_coverage.total&url=https://raw.githubusercontent.com/Dreycey/PhageFilter/main/target/debug/coverage/coverage.json)](https://<username>.github.io/<repository>/)
+
 ![phage filter logo](misc/PhageFilterLogo.png)
 
 # PhageFilter

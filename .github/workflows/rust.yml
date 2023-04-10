@@ -20,3 +20,63 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Rust
+        uses: actions/setup-rust@v1
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Generate coverage report
+        run: cargo tarpaulin --count --output cobertura.xml
+
+      - name: Extract coverage percentage
+        run: echo "::set-output name=coverage::$(grep -oP 'line-rate=\"\K\d+\.\d+' cobertura.xml)"
+
+      - name: Generate coverage badge URL
+        id: badge
+        run: |
+          percentage=${{ steps.coverage.outputs.coverage }}
+          echo "::set-output name=badge_url::https://img.shields.io/badge/coverage-${percentage}%25-brightgreen.svg?style=flat-square"
+
+      - name: Upload badge as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: coverage-badge
+          path: badge.svg
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v1.0
+          release_name: Release v1.0
+          body: |
+            This release includes a coverage badge for the Rust unit tests.
+          draft: false
+          prerelease: false
+
+      - name: Download release asset
+        uses: actions/download-artifact@v2
+        with:
+          name: coverage-badge
+          path: .
+
+      - name: Attach badge to release
+        uses: peter-evans/upload-release-asset@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          asset_path: ./badge.svg
+          asset_name: coverage.svg
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          content_type: image/svg+xml
