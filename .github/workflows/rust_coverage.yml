@@ -48,7 +48,7 @@ jobs:
                     coverage_color="green"
                   elif (( $(echo "$coverage_percent >= 50" | bc -l) )); then
                     coverage_color="yellow"
-                  elif (( $(echo "$coverage_percent >= 25" | bc -l) )); then
+                  elif (( $(echo "$coverage_percent >= 10" | bc -l) )); then
                     coverage_color="orange"
                   fi
                   sed -i "s|badge-placeholder-red|${coverage_percent}_${coverage_color}|g" README.md
