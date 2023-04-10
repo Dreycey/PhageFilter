@@ -49,7 +49,7 @@ jobs:
                         "tarpaulin": [
                           {
                             "name": "Coverage",
-                            "value": "${{fromJson(readFileSync('./target/debug/coverage/coverage.json').toString())['tarpaulin'][0]['line_coverage']['total']}}%",
+                            "value": "${{fromJson(actions.toolkit.fileToString('./target/debug/coverage/coverage.json')).tarpaulin[0].line_coverage.total}}%",
                             "color": "green"
                           }
                         ]
