@@ -1,7 +1,8 @@
 use bio::alphabets::dna;
 use bio::io::{fasta, fastq};
-use env_logger::filter;
+use itertools::join;
 use rayon::prelude::*;
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
@@ -67,10 +68,10 @@ pub struct DNASequence {
 }
 
 impl DNASequence {
-    pub fn new(sequence: Option<Vec<u8>>, id: String, kmer_size: usize) -> DNASequence {
+    pub fn new(sequence: Option<Vec<u8>>, id: String, kmers: Vec<Vec<u8>>) -> DNASequence {
         DNASequence {
             id,
-            kmers: get_kmers(&sequence.as_ref().unwrap(), &kmer_size),
+            kmers, //get_kmers(&sequence.as_ref().unwrap(), &kmer_size),
             sequence,
         }
     }
@@ -108,11 +109,7 @@ impl RecordTypes {
                 if !filtering {
                     sequence = None;
                 }
-                Some(DNASequence {
-                    sequence,
-                    id,
-                    kmers,
-                })
+                Some(DNASequence::new(sequence, id, kmers))
             }
             RecordTypes::FastqRecords(record) => {
                 let record = record.next();
@@ -126,11 +123,7 @@ impl RecordTypes {
                 if !filtering {
                     sequence = None;
                 }
-                Some(DNASequence {
-                    sequence,
-                    id,
-                    kmers,
-                })
+                Some(DNASequence::new(sequence, id, kmers))
             }
         }
     }

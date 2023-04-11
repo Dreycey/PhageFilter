@@ -3,12 +3,18 @@ mod bloom_tree;
 mod cache;
 mod file_parser;
 mod query;
+mod result_map;
 use clap::{arg, Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
 use log;
+use rayon::prelude::*;
+use std::fs;
 use std::fs::File;
+use std::io;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 #[derive(Parser)]
 #[command(name = "MyApp")]
@@ -172,6 +178,7 @@ fn main() {
                 db_path,
                 threads
             );
+
             // number of threads to run
             rayon::ThreadPoolBuilder::new()
                 .num_threads(*threads)
@@ -237,12 +244,15 @@ fn main() {
             let mut bloom_tree: bloom_tree::BloomTree =
                 bloom_tree::BloomTree::load(full_db_path, bloomfilter_cache);
 
+            // create a result map
+            let mut result_map = result_map::ResultMap::new();
+
             // parse reads
-            println!("filtering reads: {}", pos_filter);
-            println!("negative filtering reads: {}", neg_filter);
+            println!("Filtering reads | pos={}; neg={}", pos_filter, neg_filter);
             println!("Querying reads...");
-            let filtering_option = (*pos_filter || *neg_filter);
-            println!("filtering: {}", filtering_option);
+            let filtering_option = *pos_filter || *neg_filter;
+
+            // create a read buffer
             let mut readqueue = file_parser::ReadQueue::new(
                 &reads,
                 *block_size_reads,
@@ -250,19 +260,97 @@ fn main() {
                 filtering_option,
             );
 
+            // create an output directory
+            let output_directory = PathBuf::from(out);
+            create_and_overwrite_directory(&output_directory);
+
+            // open output files
+            let mut pos_filter_file = if *pos_filter {
+                Some(File::create(output_directory.join("POS_FILTERING.fa")).unwrap())
+            } else {
+                None
+            };
+            let mut neg_filter_file = if *neg_filter {
+                Some(File::create(output_directory.join("NEG_FILTERING.fa")).unwrap())
+            } else {
+                None
+            };
+
             // Check for presence in the bloom tree; block-by-block
             let mut read_block: Vec<file_parser::DNASequence> = readqueue.next_block();
             while !read_block.is_empty() {
-                bloom_tree = query::query_batch(bloom_tree, &read_block, *cuttoff_threshold);
+                // query the read batch.
+                bloom_tree = query::query_batch(
+                    bloom_tree,
+                    &mut read_block,
+                    *cuttoff_threshold,
+                    &mut result_map,
+                );
+
+                // add reads to outfile
+                if (filtering_option) {
+                    // for read in read_block.iter() {
+                    //     let seq =
+                    //         String::from_utf8(read.sequence.as_ref().unwrap().to_ascii_uppercase())
+                    //             .unwrap();
+                    //     if result_map.read_mapped(&read.id) {
+                    //         if let Some(pos_file) = pos_filter_file.as_mut() {
+                    //             writeln!(pos_file, ">{}\n{}", result_map.get_ext_id(&read.id), seq)
+                    //                 .unwrap();
+                    //         }
+                    //     } else if let Some(neg_file) = neg_filter_file.as_mut() {
+                    //         writeln!(neg_file, ">{}\n{}", read.id, seq).unwrap();
+                    //     }
+                    // }
+                    let pos_filter_file = pos_filter_file.as_mut().map(Mutex::new);
+                    let neg_filter_file = neg_filter_file.as_mut().map(Mutex::new);
+
+                    read_block.par_iter().for_each(|read| {
+                        let seq =
+                            String::from_utf8(read.sequence.as_ref().unwrap().to_ascii_uppercase())
+                                .unwrap();
+
+                        if result_map.read_mapped(&read.id) {
+                            if let Some(pos_file) = pos_filter_file.as_ref() {
+                                // Lock the Mutex before writing to the file
+                                let mut pos_file = pos_file.lock().unwrap();
+                                writeln!(pos_file, ">{}\n{}", result_map.get_ext_id(&read.id), seq)
+                                    .unwrap();
+                            }
+                        } else if let Some(neg_file) = neg_filter_file.as_ref() {
+                            // Lock the Mutex before writing to the file
+                            let mut neg_file = neg_file.lock().unwrap();
+                            writeln!(neg_file, ">{}\n{}", read.id, seq).unwrap();
+                        }
+                    });
+                }
+
+                // empty result map
+                result_map.empty_read_map();
+
+                // get next read block
                 read_block = readqueue.next_block();
             }
 
             // open output file to write to
-            let mut out_file = File::create(out).unwrap();
+            let mut out_file = File::create(output_directory.join("CLASSIFICATION.csv")).unwrap();
 
             // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
             query::save_leaf_counts(&bloom_tree.root.unwrap(), &mut out_file);
             println!("Finished.");
         }
     }
+}
+
+fn create_and_overwrite_directory(dir_path: &PathBuf) -> io::Result<()> {
+    // Check if the directory exists
+    if let Ok(metadata) = fs::metadata(dir_path) {
+        if metadata.is_dir() {
+            // Remove the directory if it exists
+            fs::remove_dir_all(dir_path)?;
+        }
+    }
+
+    // Create the directory
+    fs::create_dir(dir_path)
 }

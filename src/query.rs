@@ -15,6 +15,7 @@
 use crate::bloom_filter::{BloomFilter, ASMS};
 use crate::bloom_tree::{BloomNode, BloomTree};
 use crate::file_parser;
+use crate::result_map;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::Write;
@@ -66,6 +67,7 @@ pub(crate) fn query_batch(
     mut bloom_tree: BloomTree,
     read_set: &[file_parser::DNASequence],
     threshold: f32,
+    result_map: &mut result_map::ResultMap,
 ) -> BloomTree {
     let root_match = bloom_tree.root.take();
     bloom_tree.root = match root_match {
@@ -75,6 +77,7 @@ pub(crate) fn query_batch(
             &read_set.iter().collect::<Vec<&file_parser::DNASequence>>()[..],
             threshold,
             bloom_tree.kmer_size,
+            result_map,
         )),
         _ => None,
     };
@@ -102,6 +105,7 @@ fn _query_batch(
     read_set: &[&file_parser::DNASequence],
     threshold: f32,
     kmer_size: usize,
+    result_map: &mut result_map::ResultMap,
 ) -> Box<BloomNode> {
     // get bloom filter
     let bf_bloom_node_b4 = bloom_tree
@@ -110,7 +114,7 @@ fn _query_batch(
         .unwrap();
     let bf_bloom_node = bf_bloom_node_b4.read().unwrap();
 
-    let pass: Vec<&file_parser::DNASequence> = read_set
+    let mut pass: Vec<&file_parser::DNASequence> = read_set
         .par_iter()
         .filter(|&&read| query_passes(&bf_bloom_node, read, threshold))
         .map(|&read| read) // Use map() to get the right item type
@@ -127,6 +131,7 @@ fn _query_batch(
                     &queue[..],
                     threshold,
                     kmer_size,
+                    result_map,
                 ));
             }
             if let Some(right_child) = bloom_node.right_child.take() {
@@ -136,11 +141,29 @@ fn _query_batch(
                     &queue[..],
                     threshold,
                     kmer_size,
+                    result_map,
                 ));
             }
         }
     } else {
         bloom_node.mapped_reads += pass.len();
+        let genome_id = bloom_node.tax_id.clone().unwrap();
+        // only point where we know reads are at leaf node.
+        // also where we would add nodes to a passing set.
+        if pass.len() > 0 {
+            let first_read: &&file_parser::DNASequence = pass.first().unwrap();
+            if first_read.sequence.is_some() {
+                //println!("{} => {}", genome_id, first_read.id);
+                for read in pass.iter() {
+                    // Updated this line
+                    //read.add_genome(genome_id.clone()); // .add_genome(genome_id.clone());
+                    //println!("{} => {}", genome_id, read.get_genomes_and_name());
+                    let read_id = read.id.clone();
+                    result_map.add_read_map(read_id.clone(), genome_id.clone());
+                    //println!("{}", result_map.read_mapped(&read_id));
+                }
+            }
+        }
     }
 
     return bloom_node;
