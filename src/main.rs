@@ -71,7 +71,7 @@ enum Commands {
         /// Path to read file or directory of reads. (Fasta or Fastq, or dirs with both)
         #[arg(required = true, short, long)]
         reads: String,
-        /// Path to output file. (CSV)
+        /// Path to output directory.
         #[arg(required = true, short, long)]
         out: String,
         /// Path of the tree stored to disk.
@@ -89,6 +89,12 @@ enum Commands {
         /// Size of the LRU cache. (how many BFs in memory at once.)
         #[arg(required = false, default_value_t = 10, short, long)]
         cache_size: usize,
+        /// Filter reads matching genomes in the gSBT.
+        #[arg(required = false, default_value_t = false, long)]
+        pos_filter: bool,
+        /// Filter reads NOT matching genomes in the gSBT.
+        #[arg(required = false, default_value_t = false, long)]
+        neg_filter: bool,
     },
 }
 
@@ -127,7 +133,7 @@ fn main() {
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(&genomes, 1, *kmer_size);
+                file_parser::ReadQueue::new(&genomes, 1, *kmer_size, false);
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             // create a new cache
@@ -185,7 +191,7 @@ fn main() {
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(&genomes, 1, bloom_tree.kmer_size);
+                file_parser::ReadQueue::new(&genomes, 1, bloom_tree.kmer_size, false);
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             while !genome_block.is_empty() {
@@ -208,6 +214,8 @@ fn main() {
             block_size_reads,
             filter_threshold: cuttoff_threshold,
             cache_size,
+            pos_filter,
+            neg_filter,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -230,9 +238,17 @@ fn main() {
                 bloom_tree::BloomTree::load(full_db_path, bloomfilter_cache);
 
             // parse reads
-            print!("Querying reads... \n");
-            let mut readqueue =
-                file_parser::ReadQueue::new(&reads, *block_size_reads, bloom_tree.kmer_size);
+            println!("filtering reads: {}", pos_filter);
+            println!("negative filtering reads: {}", neg_filter);
+            println!("Querying reads...");
+            let filtering_option = (*pos_filter || *neg_filter);
+            println!("filtering: {}", filtering_option);
+            let mut readqueue = file_parser::ReadQueue::new(
+                &reads,
+                *block_size_reads,
+                bloom_tree.kmer_size,
+                filtering_option,
+            );
 
             // Check for presence in the bloom tree; block-by-block
             let mut read_block: Vec<file_parser::DNASequence> = readqueue.next_block();
@@ -246,7 +262,7 @@ fn main() {
 
             // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
             query::save_leaf_counts(&bloom_tree.root.unwrap(), &mut out_file);
-            print!("Finished. \n");
+            println!("Finished.");
         }
     }
 }
