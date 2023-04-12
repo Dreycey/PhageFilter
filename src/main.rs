@@ -14,13 +14,13 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
-#[command(name = "MyApp")]
+#[command(name = "PhageFilter")]
 #[command(author = "Dreycey Albin & Kirby Linvill")]
 #[command(version = "2.0")]
-#[command(about = "A fast, simple and efficient metagenomic classification tool.", long_about = None)]
+#[command(about = "A fast, simple and memory efficient metagenomic filtering tool.", long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
     /// Different command options. (Build or Query)
@@ -267,11 +267,13 @@ fn main() {
             // open output files
             let mut pos_filter_file = if *pos_filter {
                 Some(File::create(output_directory.join("POS_FILTERING.fa")).unwrap())
+                    .map(|f| Arc::new(Mutex::new(f)))
             } else {
                 None
             };
             let mut neg_filter_file = if *neg_filter {
                 Some(File::create(output_directory.join("NEG_FILTERING.fa")).unwrap())
+                    .map(|f| Arc::new(Mutex::new(f)))
             } else {
                 None
             };
@@ -289,27 +291,10 @@ fn main() {
 
                 // add reads to outfile
                 if (filtering_option) {
-                    // for read in read_block.iter() {
-                    //     let seq =
-                    //         String::from_utf8(read.sequence.as_ref().unwrap().to_ascii_uppercase())
-                    //             .unwrap();
-                    //     if result_map.read_mapped(&read.id) {
-                    //         if let Some(pos_file) = pos_filter_file.as_mut() {
-                    //             writeln!(pos_file, ">{}\n{}", result_map.get_ext_id(&read.id), seq)
-                    //                 .unwrap();
-                    //         }
-                    //     } else if let Some(neg_file) = neg_filter_file.as_mut() {
-                    //         writeln!(neg_file, ">{}\n{}", read.id, seq).unwrap();
-                    //     }
-                    // }
-                    let pos_filter_file = pos_filter_file.as_mut().map(Mutex::new);
-                    let neg_filter_file = neg_filter_file.as_mut().map(Mutex::new);
-
                     read_block.par_iter().for_each(|read| {
                         let seq =
                             String::from_utf8(read.sequence.as_ref().unwrap().to_ascii_uppercase())
                                 .unwrap();
-
                         if result_map.read_mapped(&read.id) {
                             if let Some(pos_file) = pos_filter_file.as_ref() {
                                 // Lock the Mutex before writing to the file
