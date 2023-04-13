@@ -147,10 +147,9 @@ fn _query_batch(
         }
     } else {
         bloom_node.mapped_reads += pass.len();
-        let genome_id = bloom_node.tax_id.clone().unwrap();
-        // only point where we know reads are at leaf node.
-        // also where we would add nodes to a passing set.
+
         // Create maping between reads and genomes.
+        let genome_id = bloom_node.tax_id.clone().unwrap();
         if pass.len() > 0 {
             let first_read: &&file_parser::DNASequence = pass.first().unwrap();
             if first_read.sequence.is_some() {
