@@ -1,6 +1,8 @@
 use bio::alphabets::dna;
 use bio::io::{fasta, fastq};
+use itertools::join;
 use rayon::prelude::*;
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
@@ -60,16 +62,17 @@ pub fn get_kmers(sequence: &Vec<u8>, &kmer_size: &usize) -> Vec<Vec<u8>> {
 
 #[derive(Debug, Clone)]
 pub struct DNASequence {
-    // pub sequence: Vec<u8>,
+    pub sequence: Option<Vec<u8>>,
     pub id: String,
     pub kmers: Vec<Vec<u8>>,
 }
 
 impl DNASequence {
-    pub fn new(sequence: Vec<u8>, id: String, kmer_size: usize) -> DNASequence {
+    pub fn new(sequence: Option<Vec<u8>>, id: String, kmers: Vec<Vec<u8>>) -> DNASequence {
         DNASequence {
             id,
-            kmers: get_kmers(&sequence, &kmer_size),
+            kmers, //get_kmers(&sequence.as_ref().unwrap(), &kmer_size),
+            sequence,
         }
     }
 }
@@ -92,7 +95,7 @@ impl RecordTypes {
     ///
     /// # Panics
     /// - N/A
-    pub fn next_read(&mut self, kmer_size: usize) -> Option<DNASequence> {
+    pub fn next_read(&mut self, kmer_size: usize, filtering: bool) -> Option<DNASequence> {
         match self {
             RecordTypes::FastaRecords(record) => {
                 let record = record.next();
@@ -100,14 +103,13 @@ impl RecordTypes {
                     return None;
                 }
                 let seq_record = record.unwrap().unwrap();
-                let sequence = seq_record.seq().to_vec();
                 let id = seq_record.id().to_string();
-                let kmers = get_kmers(&sequence, &kmer_size);
-                Some(DNASequence {
-                    // sequence,
-                    id,
-                    kmers,
-                })
+                let mut sequence = Some(seq_record.seq().to_vec());
+                let kmers = get_kmers(&sequence.as_ref().unwrap(), &kmer_size);
+                if !filtering {
+                    sequence = None;
+                }
+                Some(DNASequence::new(sequence, id, kmers))
             }
             RecordTypes::FastqRecords(record) => {
                 let record = record.next();
@@ -115,14 +117,13 @@ impl RecordTypes {
                     return None;
                 }
                 let seq_record = record.unwrap().unwrap();
-                let sequence = seq_record.seq().to_vec();
+                let mut sequence = Some(seq_record.seq().to_vec());
                 let id = seq_record.id().to_string();
-                let kmers = get_kmers(&sequence, &kmer_size);
-                Some(DNASequence {
-                    // sequence,
-                    id,
-                    kmers,
-                })
+                let kmers = get_kmers(&sequence.as_ref().unwrap(), &kmer_size);
+                if !filtering {
+                    sequence = None;
+                }
+                Some(DNASequence::new(sequence, id, kmers))
             }
         }
     }
@@ -134,6 +135,7 @@ pub struct ReadQueue {
     block_size: usize,
     kmer_size: usize,
     curr_file: Option<Box<RecordTypes>>,
+    filtering: bool,
 }
 
 impl ReadQueue {
@@ -158,7 +160,12 @@ impl ReadQueue {
             self.get_next_file();
         }
         while self.block_size > read_block.len() && !self.curr_file.is_none() {
-            if let Some(result) = self.curr_file.as_mut().unwrap().next_read(self.kmer_size) {
+            if let Some(result) = self
+                .curr_file
+                .as_mut()
+                .unwrap()
+                .next_read(self.kmer_size, self.filtering)
+            {
                 read_block.push(result);
             } else {
                 self.get_next_file();
@@ -167,12 +174,13 @@ impl ReadQueue {
         read_block
     }
 
-    pub fn new(file_path: &str, block_size: usize, kmer_size: usize) -> Self {
+    pub fn new(file_path: &str, block_size: usize, kmer_size: usize, filtering: bool) -> Self {
         ReadQueue {
             filequeue: get_file_names(&file_path),
             block_size,
             kmer_size,
             curr_file: None,
+            filtering,
         }
     }
 }

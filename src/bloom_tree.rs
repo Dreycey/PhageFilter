@@ -410,7 +410,12 @@ mod tests {
     impl TestContext {
         fn setup() -> TestContext {
             println!("Setting up the test context");
-            fs::create_dir(get_tmp_dir()).unwrap();
+            let tmp_direcory = get_tmp_dir();
+            if tmp_direcory.is_dir() {
+                fs::remove_dir_all(&tmp_direcory);
+            }
+
+            fs::create_dir(&tmp_direcory).unwrap();
             TestContext {}
         }
 
@@ -444,10 +449,11 @@ mod tests {
 
         // create a DNA sequence.
         let record_id = "tmp_bloom";
+        let kmers = file_parser::get_kmers(&"ATCAG".as_bytes().to_vec(), &kmer_size);
         let record = file_parser::DNASequence::new(
-            "ATCAG".as_bytes().to_vec(),
+            Some("ATCAG".as_bytes().to_vec()),
             record_id.to_string(),
-            kmer_size,
+            kmers,
         );
 
         // create a new cache
