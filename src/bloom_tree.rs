@@ -410,11 +410,12 @@ mod tests {
     impl TestContext {
         fn setup() -> TestContext {
             println!("Setting up the test context");
-            if metadata.is_dir() {
-                fs::remove_dir_all(get_tmp_dir())?;
+            let tmp_direcory = get_tmp_dir();
+            if tmp_direcory.is_dir() {
+                fs::remove_dir_all(&tmp_direcory);
             }
 
-            fs::create_dir(get_tmp_dir()).unwrap();
+            fs::create_dir(&tmp_direcory).unwrap();
             TestContext {}
         }
 
