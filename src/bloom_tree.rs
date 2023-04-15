@@ -9,9 +9,11 @@ use crate::bloom_filter::hasher::HashSeed;
 /// ```rust
 /// let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
 /// ```
-use crate::bloom_filter::{create_bloom_filter, DistanceChecker, ASMS};
+use crate::bloom_filter::{BloomFilter, create_bloom_filter, DistanceChecker, ASMS};
 use crate::cache::{BFLruCache, BloomFilterCache};
 use crate::file_parser;
+use crate::Arc;
+use std::sync::RwLock;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -189,32 +191,12 @@ impl BloomTree<HashSeed, HashSeed> {
         node: Box<BloomNode>,
     ) -> Box<BloomNode> {
         if let (Some(left), Some(right)) = (&current_node.left_child, &current_node.right_child) {
-            let right_distance;
-            let left_distance;
-            {
-                // Get bloom filters from the cache
-                let b4_current_node = self
-                    .bf_cache
-                    .get_filter(&current_node.bloom_filter_path)
-                    .unwrap();
-                let mut bf_current_node = b4_current_node.write().unwrap();
+            // Get bloom filters from the cache
+            self.node_union(&current_node, &node);
 
-                let b4_node = self.bf_cache.get_filter(&node.bloom_filter_path).unwrap();
-                let bf_node = b4_node.read().unwrap();
-
-                let b4_left = self.bf_cache.get_filter(&left.bloom_filter_path).unwrap();
-                let bf_left = b4_left.read().unwrap();
-
-                let b4_right = self.bf_cache.get_filter(&right.bloom_filter_path).unwrap();
-                let bf_right = b4_right.read().unwrap();
-
-                // Union the current bloom filter with the new node's bloom filter
-                bf_current_node.union(&bf_node);
-
-                // Calculate distances between the new node's bloom filter and left/right children's bloom filters
-                right_distance = bf_right.distance(&bf_node);
-                left_distance = bf_left.distance(&bf_node);
-            }
+            // Calculate distances between the new node's bloom filter and left/right children
+            let right_distance = self.node_distance(&right, &node);
+            let left_distance = self.node_distance(&left, &node);
 
             if right_distance < left_distance {
                 current_node.right_child =
@@ -252,33 +234,45 @@ impl BloomTree<HashSeed, HashSeed> {
         let n2: u16 = rng.gen();
         let node_name = "Internal Node".to_string() + "_" + &n2.to_string();
         let mut new_internal_node = self.make_bloom_node(node_name.clone());
-        {
-            // get bfs
-            let b4_new_node = self
-                .bf_cache
-                .get_filter(&new_node.bloom_filter_path)
-                .unwrap();
-            let bf_new_node = b4_new_node.read().unwrap();
-            //
-            let b4_new_internal_node = self
-                .bf_cache
-                .get_filter(&new_internal_node.bloom_filter_path)
-                .unwrap();
-            let mut bf_new_internal_node = b4_new_internal_node.write().unwrap();
-            //
-            let b4_current_node = self
-                .bf_cache
-                .get_filter(&current_node.bloom_filter_path)
-                .unwrap();
-            let bf_current_node = b4_current_node.read().unwrap();
-            // Combine children's bloom filters
-            bf_new_internal_node.union(&bf_current_node);
-            bf_new_internal_node.union(&bf_new_node);
-        }
+
+        // union children nodes into new parent internal node
+        self.node_union(&new_internal_node, &new_node);
+        self.node_union(&new_internal_node, &current_node);
+
+        // assign children nodes to the new internaal node.
         new_internal_node.left_child = Some(current_node);
         new_internal_node.right_child = Some(new_node);
 
         return new_internal_node;
+    }
+    
+    fn node_distance(&self, node_a: &BloomNode, node_b: &BloomNode) -> usize {
+            // get BF for node a
+            let b4_node_a = self.get_bf(node_a);
+            let bf_node_a = b4_node_a.read().unwrap();
+    
+            // get BF for node b
+            let b4_node_b = self.get_bf(node_b);
+            let bf_node_b = b4_node_b.read().unwrap();
+
+            return bf_node_a.distance(&bf_node_b);
+    }
+
+    fn node_union(&self, node2modify: &BloomNode, node2add: &BloomNode) {
+        // get BF for node to modify.
+        let b4_node2modify = self.get_bf(node2modify);
+        let mut bf_node2modify = b4_node2modify.write().unwrap();
+
+        // get BF for node beiing added.
+        let b4_node2add = self.get_bf(node2add);
+        let bf_node2add = b4_node2add.read().unwrap();
+
+        // union BFs.
+        bf_node2modify.union(&bf_node2add);
+    }
+
+    fn get_bf(&self, bloom_node: &BloomNode) -> Arc<RwLock<BloomFilter>> {
+        self.bf_cache.get_filter(&bloom_node.bloom_filter_path).unwrap()
     }
 
     /// This method saves the tree to disk using a given directory name.
