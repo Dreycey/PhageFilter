@@ -40,7 +40,7 @@ enum Commands {
         genomes: String,
         /// Path to store the tree to disk.
         #[arg(required = true, short, long)]
-        db_path: String,
+        db_path: PathBuf,
         /// Number of threads to use to build the bloom tree.
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
@@ -64,7 +64,7 @@ enum Commands {
         genomes: String,
         /// Path to store the tree to disk.
         #[arg(required = true, short, long)]
-        db_path: String,
+        db_path: PathBuf,
         /// Number of threads to use to build the bloom tree.
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
@@ -79,10 +79,10 @@ enum Commands {
         reads: String,
         /// Path to output directory.
         #[arg(required = true, short, long)]
-        out: String,
+        out: PathBuf,
         /// Path of the tree stored to disk.
         #[arg(required = true, short, long)]
-        db_path: String,
+        db_path: PathBuf,
         /// Number of threads to use for read matching.
         #[arg(required = false, default_value_t = 4, short, long)]
         threads: usize,
@@ -125,7 +125,7 @@ fn main() {
         } => {
             // initial message to show used parameters.
             log::info!(
-                "\n Build input-  \n\tdb:{} \n\tthreads:{} \n\tkmersize:{} \n",
+                "\n Build input-  \n\tdb:{:?} \n\tthreads:{} \n\tkmersize:{} \n",
                 db_path,
                 threads,
                 kmer_size
@@ -143,13 +143,13 @@ fn main() {
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             // create a new cache
-            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, PathBuf::from(db_path));
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, db_path.clone());
 
             // build: bloom trees
             print!("Building the SBT... \n");
             let mut bloom_tree = bloom_tree::BloomTree::new(
                 *kmer_size,
-                &PathBuf::from(db_path),
+                &db_path,
                 bloomfilter_cache,
                 *false_pos_rate,
                 *largest_genome,
@@ -162,8 +162,7 @@ fn main() {
             }
 
             // save tree to disk
-            let save_dir = Path::new(db_path);
-            bloom_tree.save(save_dir);
+            bloom_tree.save(db_path);
             print!("Finished. \n");
         }
         Commands::Add {
@@ -174,7 +173,7 @@ fn main() {
         } => {
             // initial message to show used parameters.
             log::info!(
-                "\n Build input-  \n\tdb:{} \n\tthreads:{}\n",
+                "\n Build input-  \n\tdb:{:?} \n\tthreads:{}\n",
                 db_path,
                 threads
             );
@@ -189,12 +188,11 @@ fn main() {
             print!("Adding new genomes to the SBT... \n");
 
             // create a new cache
-            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, PathBuf::from(db_path));
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, db_path.clone());
 
             // load bloom tree from disk
-            let full_db_path: &Path = Path::new(db_path);
             let mut bloom_tree: bloom_tree::BloomTree =
-                bloom_tree::BloomTree::load(full_db_path, bloomfilter_cache);
+                bloom_tree::BloomTree::load(&db_path, bloomfilter_cache);
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
@@ -209,8 +207,7 @@ fn main() {
             }
 
             // save tree to disk
-            let save_dir = Path::new(db_path);
-            bloom_tree.save(save_dir);
+            bloom_tree.save(db_path);
             print!("Finished. \n");
         }
         Commands::Query {
@@ -226,7 +223,7 @@ fn main() {
         } => {
             // initial message to show used parameters.
             log::info!(
-                "\n Query input- \n\treads:{} \n\tthreads:{}, \n\tout:{}, \n\tdb_path:{}, \n\tthreads:{} \n\tcuttoff_threshold:{} \n",
+                "\n Query input- \n\treads:{} \n\tthreads:{}, \n\tout:{:?}, \n\tdb_path:{:?}, \n\tthreads:{} \n\tcuttoff_threshold:{} \n",
                 reads, threads, out, db_path, threads, cuttoff_threshold
             );
 
@@ -237,12 +234,11 @@ fn main() {
                 .unwrap();
 
             // create a new cache
-            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, PathBuf::from(db_path));
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, db_path.clone());
 
             // load bloom tree from disk
-            let full_db_path: &Path = Path::new(db_path);
             let mut bloom_tree: bloom_tree::BloomTree =
-                bloom_tree::BloomTree::load(full_db_path, bloomfilter_cache);
+                bloom_tree::BloomTree::load(&db_path, bloomfilter_cache);
 
             // create a result map
             let mut result_map = result_map::ResultMap::new();
@@ -261,18 +257,17 @@ fn main() {
             );
 
             // create an output directory
-            let output_directory = PathBuf::from(out);
-            create_and_overwrite_directory(&output_directory);
+            create_and_overwrite_directory(&out);
 
             // open output files
             let mut pos_filter_file = if *pos_filter {
-                Some(File::create(output_directory.join("POS_FILTERING.fa")).unwrap())
+                Some(File::create(out.join("POS_FILTERING.fa")).unwrap())
                     .map(|f| Arc::new(Mutex::new(f)))
             } else {
                 None
             };
             let mut neg_filter_file = if *neg_filter {
-                Some(File::create(output_directory.join("NEG_FILTERING.fa")).unwrap())
+                Some(File::create(out.join("NEG_FILTERING.fa")).unwrap())
                     .map(|f| Arc::new(Mutex::new(f)))
             } else {
                 None
@@ -318,7 +313,7 @@ fn main() {
             }
 
             // open output file to write to
-            let mut out_file = File::create(output_directory.join("CLASSIFICATION.csv")).unwrap();
+            let mut out_file = File::create(out.join("CLASSIFICATION.csv")).unwrap();
 
             // save the number of reads mapped to leaf nodes (i.e. genomes in the file)
             query::save_leaf_counts(&bloom_tree.root.unwrap(), &mut out_file);
