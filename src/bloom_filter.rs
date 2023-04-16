@@ -60,15 +60,14 @@ pub fn create_bloom_filter(
     false_pos_rate: f32,
     largest_expected_genome: u32,
 ) -> BloomFilter {
-    //let expected_num_items: u32 = 1_000_000;
     log::debug!(
         "(Building BF) number of items expected: {}\n",
         largest_expected_genome
     );
-    // instantiate a BloomFilter
     // The number of items is at most the length of the genome (largest_expected_genome == item count)
     let mut filter = BloomFilter::with_rate(false_pos_rate, largest_expected_genome, hash_states);
     filter.file_path = Some(full_bf_path);
+
 
     return filter;
 }
@@ -91,8 +90,14 @@ pub struct BloomFilter<R = HashSeed, S = HashSeed> {
     hash_builder_one: R,
     hash_builder_two: S,
     file_path: Option<PathBuf>,
+    #[serde(skip, default = "always_false")]
+    modified: bool // if modified, Drop uses this to save new copy.
 }
 
+fn always_false () -> bool {
+    false
+}
+ 
 impl<R, S> BloomFilter<R, S> {
     fn as_bloom_filter(&mut self) -> &mut BloomFilter {
         unsafe { &mut *(self as *mut Self as *mut BloomFilter) }
@@ -102,8 +107,12 @@ impl<R, S> BloomFilter<R, S> {
 impl<R, S> Drop for BloomFilter<R, S> {
     fn drop(&mut self) {
         let bloomfilter_inner = self.as_bloom_filter();
-        if bloomfilter_inner.file_path.is_some() {
+        if bloomfilter_inner.file_path.is_some() && bloomfilter_inner.modified {
             let path = bloomfilter_inner.file_path.as_ref().unwrap().as_path();
+            log::debug!(
+                "(BF Destructor/Drop) saving the following to disk: {:?}\n",
+                path
+            );
             bloomfilter_inner.save_to_file(path);
         }
     }
@@ -139,7 +148,7 @@ impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
 }
 
 impl BloomFilter<HashSeed, HashSeed> {
-    pub fn load_from_file(bloom_filter_path: &Path) -> Self {
+    pub fn load_from_file(bloom_filter_path: &PathBuf) -> Self {
         // Open the file at the given path
         let file = File::open(bloom_filter_path).unwrap_or_else(|_| {
             panic!("Failed to open Bloom filter file: {:?}", bloom_filter_path)
@@ -149,12 +158,15 @@ impl BloomFilter<HashSeed, HashSeed> {
         let reader = BufReader::new(file);
 
         // Deserialize the Bloom filter from the reader
-        let bloom_filter: BloomFilter = bincode::deserialize_from(reader).unwrap_or_else(|_| {
+        let mut bloom_filter: BloomFilter = bincode::deserialize_from(reader).unwrap_or_else(|_| {
             panic!(
                 "Failed to deserialize Bloom filter from file: {:?}",
                 bloom_filter_path
             )
         });
+
+        // update path to BFs
+        bloom_filter.file_path =  Some(bloom_filter_path.clone());
 
         bloom_filter
     }
@@ -183,6 +195,11 @@ impl BloomFilter<HashSeed, HashSeed> {
         writer.flush().unwrap_or_else(|_| {
             panic!("Failed to flush Bloom filter file: {:?}", bloom_filter_path)
         });
+
+        log::debug!(
+            "(BF save_to_file()) The BF was saved to disk: {:?}\n",
+            bloom_filter_path
+        );
     }
 
     /// Create a new BloomFilter with the specified number of bits,
@@ -199,7 +216,8 @@ impl BloomFilter<HashSeed, HashSeed> {
             num_hashes: num_hashes,
             hash_builder_one,
             hash_builder_two,
-            file_path: None, // TODO: update
+            file_path: None,
+            modified: true,
         }
     }
 
@@ -237,6 +255,7 @@ impl BloomFilter<HashSeed, HashSeed> {
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
     fn intersect(&mut self, other: &BloomFilter) {
+        self.modified = true;
         self.bits &= &other.bits;
     }
 
@@ -249,6 +268,7 @@ impl BloomFilter<HashSeed, HashSeed> {
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
     pub(crate) fn union(&mut self, other: &BloomFilter) {
+        self.modified = true;
         self.bits |= &other.bits;
     }
 }

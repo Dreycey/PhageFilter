@@ -143,7 +143,7 @@ fn main() {
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             // create a new cache
-            let bloomfilter_cache = cache::BFLruCache::new(*cache_size);
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, PathBuf::from(db_path));
 
             // build: bloom trees
             print!("Building the SBT... \n");
@@ -189,7 +189,7 @@ fn main() {
             print!("Adding new genomes to the SBT... \n");
 
             // create a new cache
-            let bloomfilter_cache = cache::BFLruCache::new(*cache_size);
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, PathBuf::from(db_path));
 
             // load bloom tree from disk
             let full_db_path: &Path = Path::new(db_path);
@@ -237,7 +237,7 @@ fn main() {
                 .unwrap();
 
             // create a new cache
-            let bloomfilter_cache = cache::BFLruCache::new(*cache_size);
+            let bloomfilter_cache = cache::BFLruCache::new(*cache_size, PathBuf::from(db_path));
 
             // load bloom tree from disk
             let full_db_path: &Path = Path::new(db_path);
