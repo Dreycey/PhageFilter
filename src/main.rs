@@ -244,7 +244,7 @@ fn main() {
             let mut result_map = result_map::ResultMap::new();
 
             // parse reads
-            println!("Filtering reads | pos={}; neg={}", pos_filter, neg_filter);
+            println!("Filtering settings: positive={}; negative={}", pos_filter, neg_filter);
             println!("Querying reads...");
             let filtering_option = *pos_filter || *neg_filter;
 
@@ -285,7 +285,7 @@ fn main() {
                 );
 
                 // add reads to outfile
-                if (filtering_option) {
+                if filtering_option {
                     read_block.par_iter().for_each(|read| {
                         let seq =
                             String::from_utf8(read.sequence.as_ref().unwrap().to_ascii_uppercase())
