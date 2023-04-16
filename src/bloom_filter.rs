@@ -373,6 +373,7 @@ mod tests {
             hash_builder_one: state.clone(),
             hash_builder_two: state.clone(),
             file_path: None,
+            modified: false
         }
     }
 

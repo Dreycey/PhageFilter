@@ -101,8 +101,8 @@ mod tests {
 
     #[test]
     fn test_get_filter() {
-        let key: PathBuf = PathBuf::from("TEST");
-        let cache = BFLruCache::new(2);
+        let key: PathBuf = PathBuf::from("example.bf");
+        let cache = BFLruCache::new(2, PathBuf::from(""));
         let bloomfilter = create_bloom_filter();
         cache.add_filter(&key, bloomfilter);
         assert!(cache.get_filter(&key).is_some());
@@ -110,8 +110,8 @@ mod tests {
 
     #[test]
     fn test_bad_filter() {
-        let key: PathBuf = PathBuf::from("TEST");
-        let cache = BFLruCache::new(1);
+        let key: PathBuf = PathBuf::from("example.bf");
+        let cache = BFLruCache::new(1, PathBuf::from(""));
         assert!(cache.get_filter(&key).is_none());
     }
 
@@ -126,11 +126,11 @@ mod tests {
             hash_states,
             bf_disk_key.clone(),
             false_pos_rate,
-            largest_expected_genome,
+            largest_expected_genome
         );
 
         // create cache
-        let cache = BFLruCache::new(1);
+        let cache = BFLruCache::new(1, PathBuf::from(""));
         cache.add_filter(&bf_disk_key, bloomfilter);
 
         // kick out first bloom filter
@@ -148,13 +148,13 @@ mod tests {
     proptest! {
         #[test]
         fn test_get_capacity(capacity in select((0..=500_000).collect::<Vec<usize>>())) {
-            let cache = BFLruCache::new(capacity);
+            let cache = BFLruCache::new(capacity, PathBuf::from(""));
             prop_assert_eq!(cache.get_capacity(), capacity);
         }
 
         #[test]
         fn test_cache_debug(capacity in select((10..=500_000).collect::<Vec<usize>>())) {
-            let cache = BFLruCache::new(capacity);
+            let cache = BFLruCache::new(capacity, PathBuf::from(""));
             let debug = format!("{:?}", cache);
             let expected = format!("BFLruCache {{ capacity: {} }}", cache.get_capacity());
             prop_assert_eq!(debug, expected);

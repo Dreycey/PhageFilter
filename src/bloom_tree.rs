@@ -448,7 +448,7 @@ mod tests {
         );
 
         // create a new cache
-        let bloomfilter_cache = cache::BFLruCache::new(cache_size);
+        let bloomfilter_cache = cache::BFLruCache::new(cache_size, directory.clone());
 
         // (automated) creating tree.
         let mut tree = BloomTree::new(
@@ -476,10 +476,10 @@ mod tests {
         // create a BloomTree manually.
         let expected_tree = BloomTree {
             root: Some(Box::new(expected_root)),
-            directory: Some(directory),
+            directory: Some(directory.clone()),
             kmer_size: kmer_size,
             hash_states: tree.hash_states.clone(),
-            bf_cache: Box::new(cache::BFLruCache::new(cache_size)),
+            bf_cache: Box::new(cache::BFLruCache::new(cache_size, directory.clone())),
             false_pos_rate: false_positive_rate,
             largest_expected_genome,
         };
