@@ -8,11 +8,12 @@ use lru::LruCache;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
-
+ 
 //#[derive(Debug)]
 pub struct BFLruCache {
     cache: RwLock<LruCache<PathBuf, Arc<RwLock<BloomFilter>>>>,
     capacity: usize,
+    bf_path: PathBuf,
 }
 
 /// Bloom filter cache trait defines the required
@@ -34,10 +35,11 @@ impl fmt::Debug for dyn BloomFilterCache {
 }
 
 impl BFLruCache {
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize, bf_path: PathBuf) -> Self {
         Self {
             cache: RwLock::new(LruCache::new(NonZeroUsize::new(capacity).unwrap())),
             capacity,
+            bf_path
         }
     }
 }
@@ -56,14 +58,15 @@ impl BloomFilterCache for BFLruCache {
         if let Some(filter) = cache_lock.get(key) {
             Some(filter.clone())
         } else {
-            let filter_path = Path::new(key);
+            let filter_path: PathBuf = self.bf_path.join(key).to_path_buf();
             if filter_path.exists() {
+                // open filter and update path to BFs
                 let filter: BloomFilter = BloomFilter::load_from_file(&filter_path);
                 let arc_filter = Arc::new(RwLock::new(filter));
                 cache_lock.put(key.to_path_buf(), arc_filter.clone());
                 Some(arc_filter)
             } else {
-                println!("the following is a no-go: {:?}", key.to_path_buf());
+                println!("[Cache; get_filter()] the following bloom filter is not saved to disk: {:?}", filter_path);
                 None
             }
         }
@@ -98,8 +101,8 @@ mod tests {
 
     #[test]
     fn test_get_filter() {
-        let key: PathBuf = PathBuf::from("TEST");
-        let cache = BFLruCache::new(2);
+        let key: PathBuf = PathBuf::from("example.bf");
+        let cache = BFLruCache::new(2, PathBuf::from(""));
         let bloomfilter = create_bloom_filter();
         cache.add_filter(&key, bloomfilter);
         assert!(cache.get_filter(&key).is_some());
@@ -107,8 +110,8 @@ mod tests {
 
     #[test]
     fn test_bad_filter() {
-        let key: PathBuf = PathBuf::from("TEST");
-        let cache = BFLruCache::new(1);
+        let key: PathBuf = PathBuf::from("example.bf");
+        let cache = BFLruCache::new(1, PathBuf::from(""));
         assert!(cache.get_filter(&key).is_none());
     }
 
@@ -123,11 +126,11 @@ mod tests {
             hash_states,
             bf_disk_key.clone(),
             false_pos_rate,
-            largest_expected_genome,
+            largest_expected_genome
         );
 
         // create cache
-        let cache = BFLruCache::new(1);
+        let cache = BFLruCache::new(1, PathBuf::from(""));
         cache.add_filter(&bf_disk_key, bloomfilter);
 
         // kick out first bloom filter
@@ -145,13 +148,13 @@ mod tests {
     proptest! {
         #[test]
         fn test_get_capacity(capacity in select((0..=500_000).collect::<Vec<usize>>())) {
-            let cache = BFLruCache::new(capacity);
+            let cache = BFLruCache::new(capacity, PathBuf::from(""));
             prop_assert_eq!(cache.get_capacity(), capacity);
         }
 
         #[test]
         fn test_cache_debug(capacity in select((10..=500_000).collect::<Vec<usize>>())) {
-            let cache = BFLruCache::new(capacity);
+            let cache = BFLruCache::new(capacity, PathBuf::from(""));
             let debug = format!("{:?}", cache);
             let expected = format!("BFLruCache {{ capacity: {} }}", cache.get_capacity());
             prop_assert_eq!(debug, expected);
