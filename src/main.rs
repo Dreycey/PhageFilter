@@ -247,16 +247,19 @@ fn main() {
             // create a result map
             let mut result_map = result_map::ResultMap::new();
 
+            // parse reads
+            println!("Querying reads...");
+            println!("Filtering settings: positive={}; negative={}", pos_filter, neg_filter);
+            let filtering_option = *pos_filter || *neg_filter;
+
             // changing search depth (i.e. prunes the tree to a search depth)
             if search_depth.is_some() {
-                println!("Search depth: {:?}", search_depth.unwrap());
+                if !filtering_option {
+                    println!("If using a search depth, use a filtering flag (--pos-filter or --neg-filter, or both!)");
+                }
+                println!("Search depth settings: {:?}", search_depth.unwrap());
                 bloom_tree.prune_tree(search_depth.unwrap());  
             }
-            
-            // parse reads
-            println!("Filtering settings: positive={}; negative={}", pos_filter, neg_filter);
-            println!("Querying reads...");
-            let filtering_option = *pos_filter || *neg_filter;
 
             // create a read buffer
             let mut readqueue = file_parser::ReadQueue::new(
@@ -321,6 +324,7 @@ fn main() {
                 // get next read block
                 read_block = readqueue.next_block();
             }
+
 
             // open output file to write to
             let mut out_file = File::create(out.join("CLASSIFICATION.csv")).unwrap();
