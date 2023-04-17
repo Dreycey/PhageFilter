@@ -95,6 +95,9 @@ enum Commands {
         /// Size of the LRU cache. (how many BFs in memory at once.)
         #[arg(required = false, default_value_t = 10, short, long)]
         cache_size: usize,
+        /// Depth of search within gSBT (once set, the tree depth is limited to speed search)
+        #[arg(required = false, long)]
+        search_depth: Option<usize>,
         /// Filter reads matching genomes in the gSBT.
         #[arg(required = false, default_value_t = false, long)]
         pos_filter: bool,
@@ -218,6 +221,7 @@ fn main() {
             block_size_reads,
             filter_threshold: cuttoff_threshold,
             cache_size,
+            search_depth,
             pos_filter,
             neg_filter,
         } => {
@@ -244,9 +248,18 @@ fn main() {
             let mut result_map = result_map::ResultMap::new();
 
             // parse reads
-            println!("Filtering settings: positive={}; negative={}", pos_filter, neg_filter);
             println!("Querying reads...");
+            println!("Filtering settings: positive={}; negative={}", pos_filter, neg_filter);
             let filtering_option = *pos_filter || *neg_filter;
+
+            // changing search depth (i.e. prunes the tree to a search depth)
+            if search_depth.is_some() {
+                if !filtering_option {
+                    println!("If using a search depth, use a filtering flag (--pos-filter or --neg-filter, or both!)");
+                }
+                println!("Search depth settings: {:?}", search_depth.unwrap());
+                bloom_tree.prune_tree(search_depth.unwrap());  
+            }
 
             // create a read buffer
             let mut readqueue = file_parser::ReadQueue::new(
@@ -311,6 +324,7 @@ fn main() {
                 // get next read block
                 read_block = readqueue.next_block();
             }
+
 
             // open output file to write to
             let mut out_file = File::create(out.join("CLASSIFICATION.csv")).unwrap();
