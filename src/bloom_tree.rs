@@ -294,6 +294,39 @@ impl BloomTree<HashSeed, HashSeed> {
         Box::new(bloomnode)
     }
 
+
+    /// - if the directory does not exist.
+    pub fn prune_tree(&mut self, search_depth: usize) {
+        // print where the tree is being saved.
+        log::info!(" (bloom tree; prune_tree()) pruning tree to depth of: {}", search_depth);
+        // set up queue
+        let mut queue: Vec<(&mut Box<BloomNode>, usize)> = vec![];
+        let root = self.root.as_mut().unwrap();
+        queue.push((root, 0));
+
+        // BFS through tree
+        while !queue.is_empty() {
+            if let Some((node, node_depth)) = queue.pop() {
+                if node_depth < search_depth {
+                    let node_depth = node_depth + 1;
+                    if node.left_child.is_some() {
+                        queue.push((node.left_child.as_mut().unwrap(), node_depth));
+                    }
+                    if node.right_child.is_some() {
+                        queue.push((node.right_child.as_mut().unwrap(), node_depth));
+                    }
+                } else {
+                    if node.left_child.is_some() {
+                        node.left_child = None;
+                    }
+                    if node.right_child.is_some() {
+                        node.right_child = None;
+                    }
+                }
+            }
+        }
+    }
+
     /// This method saves the tree to disk using a given directory name.
     ///
     /// # Arguments
