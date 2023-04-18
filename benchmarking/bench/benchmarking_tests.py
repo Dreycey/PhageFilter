@@ -22,16 +22,17 @@ import re
 # third party libraries
 import yaml
 import numpy as np
+import shutil
 # custom libraries
 from bench.utils import BenchmarkResult, Experiment, run_command, get_classification_metrics, get_readcount_metrics, get_true_maps
 from bench.tools import PhageFilter, Kraken2, FastViromeExplorer
-from bench.simulate_reads import multi_simulate
+import bench.simulate_reads as simulate_reads
 
 
 
 def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 5):
     """_summary_
-    Performs benchmarking of PhageFilter, testing time and memory consumption for the build process and query process.
+    Performs benchmarking of PhageFilter, testing time and memory consumption for the build process AND query process.
     For the query process, differing number of reads and DB sizes will tested in combination.
 
     Args:
@@ -49,7 +50,17 @@ def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, p
 
     # open the output file and write the header
     with open(result_csv, "w+") as output_file:
-        output_file.write(f"genome count, number of reads, build time (ns), build mem (bytes), query time (ns), query memory (bytes), recall, precision, avg. read count error\n")
+        # create output CSV header.
+        output_file.write("genome count" + ",")
+        output_file.write("number of reads" + ",")
+        output_file.write("build time (ns)" + ",")
+        output_file.write("build mem (bytes)" + ",")
+        output_file.write("query time (ns)" + ",")
+        output_file.write("query memory (bytes)" + ",")
+        output_file.write("recall" + ",")
+        output_file.write("precision" + ",")
+        output_file.write("avg. read count error" + "\n")
+
         # benchmark impact of number of genomes on build.
         genomecount2Result: Dict[int, BenchmarkResult] = {}
         for genome_count in range(step_size, number_of_genomes, step_size):
@@ -60,27 +71,42 @@ def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, p
                 genomecount2Result[genome_count] = run_command(pf_build_cmd)
                 print(f"before: {genome_dir}")
                 for read_count in [100, 1000, 10000, 100000]:
-                    test_file_path = multi_simulate(genome_dir, step_size, read_count, "simreads")
+                    # simulate reads and get true genome counts.
+                    test_file_path = simulate_reads.multi_simulate(genome_dir, step_size, read_count, "simreads")
                     truth_map = get_true_maps(test_file_path)
+
+                    # print statements.
                     print(f"\n{truth_map}\n")
                     print(len(os.listdir(genome_dir)))
+                    
+                    # make output path and run tool.
                     test_name = str(test_file_path).strip('.fq')
                     output_path = f"PhageFilter_{test_name}"
-                    run_cmd = phagefilter.run(test_file_path, output_path)
+                    run_cmd = phagefilter.run(test_file_path, output_path, filter_reads=True)
                     run_result: BenchmarkResult = run_command(run_cmd)
-                    match = re.search(r'_c(\d+)_', test_name)
-                    if match:
-                        number_of_reads = int(match.group(1))
-                    else:
-                        number_of_reads = -1 # error
+
+                    # find number of reads from file name (should be in name of simulated read file)
+                    number_of_reads = simulate_reads.get_read_counts(test_name)
+
                     # benchmark
-                    result_map = phagefilter.parse_output(output_path, genomes_path=genome_path)
+                    result_map = phagefilter.parse_output(output_path+"/CLASSIFICATION.csv", genomes_path=genome_path)
                     recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
                     read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
-                    # save to file
-                    output_file.write(f"{genome_count}, {number_of_reads}, {genomecount2Result[genome_count].elapsed_time}, {genomecount2Result[genome_count].max_memory}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
-                    # remove tmp fasta file
+
+                    # save results to file
+                    output_file.write(f"{genome_count}" + ",")
+                    output_file.write(f"{number_of_reads}" + ",")
+                    output_file.write(f"{genomecount2Result[genome_count].elapsed_time}" + ",")
+                    output_file.write(f"{genomecount2Result[genome_count].max_memory}" + ",")
+                    output_file.write(f"{run_result.elapsed_time}" + ",")
+                    output_file.write(f"{run_result.max_memory}" + ",")
+                    output_file.write(f"{recall}" + ",")
+                    output_file.write(f"{precision}" + ",")
+                    output_file.write(f"{np.average(read_count_error)}\n")
+
+                    # remove tmp fasta file and output directory
                     os.remove(test_file_path)
+                    shutil.rmtree(output_path)
 
 def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
     """_summary_
