@@ -29,7 +29,6 @@ from bench.tools import PhageFilter, Kraken2, FastViromeExplorer
 import bench.simulate_reads as simulate_reads
 
 
-
 def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 5):
     """_summary_
     Performs benchmarking of PhageFilter, testing time and memory consumption for the build process AND query process.
@@ -86,7 +85,7 @@ def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, p
                     run_result: BenchmarkResult = run_command(run_cmd)
 
                     # find number of reads from file name (should be in name of simulated read file)
-                    number_of_reads = simulate_reads.get_read_counts(test_name)
+                    number_of_reads = simulate_reads.SimReadParser.get_read_counts(test_name)
 
                     # benchmark
                     result_map = phagefilter.parse_output(output_path+"/CLASSIFICATION.csv", genomes_path=genome_path)
@@ -168,34 +167,34 @@ def benchtest_parameter_sweep(phagefilter: PhageFilter, test_directory: Path, ph
         pf_build_cmd = phagefilter.build(phagefilter_db, genome_path)
         run_command(pf_build_cmd)
         # test tree on kmer size for different thresholds.
-        for theta in range(0, 10, 2):
-            theta /= 10
+        theta_set = [theta / 10 for theta in range(0, 10, 2)]
+        for theta in theta_set:
             for test_file in os.listdir(test_directory):
                 test_file_path = os.path.join(test_directory, test_file)
-                output_file = f"phagefilter_{kmer_size}_{theta}_{test_file}.csv"
-                # parse output file (NOTE: will fail if simulated reads file name does not contain values below in name)
-                print(test_file)
-                error_rate = float(test_file.strip(
-                    ".fq").split("_")[-1].strip("e"))
-                number_of_genomes = int(test_file.strip(
-                    ".fq").split("_")[-2].strip("n"))
-                number_of_reads = int(test_file.strip(
-                    ".fq").split("_")[-3].strip("c"))
+                output_file = f"phagefilter_{kmer_size}_{theta}_{test_file}"
+
+                # parse output file
+                error_rate = simulate_reads.SimReadParser.get_error_rate(test_file)
+                number_of_genomes = simulate_reads.SimReadParser.get_genome_counts(test_file)
+                number_of_reads = simulate_reads.SimReadParser.get_read_counts(test_file)
+
                 # update theta.
                 phagefilter.theta = theta
+
                 # query
                 pf_run_cmd = phagefilter.run(test_file_path, output_file)
                 run_result: BenchmarkResult = run_command(pf_run_cmd)
+
                 # benchmark
                 truth_map = get_true_maps(test_file_path)
-                result_map = phagefilter.parse_output(output_file)
-                recall, precision = get_classification_metrics(
-                    true_map=truth_map, out_map=result_map)
-                read_count_error = get_readcount_metrics(
-                    true_map=truth_map, out_map=result_map)
+                result_map = phagefilter.parse_output(output_file+"/CLASSIFICATION.csv")
+                recall, precision = get_classification_metrics(true_map=truth_map, out_map=result_map)
+                read_count_error = get_readcount_metrics(true_map=truth_map, out_map=result_map)
+
                 # save to file
                 result_file.write(
                     f"{kmer_size}, {theta}, {error_rate}, {number_of_genomes}, {number_of_reads}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
+
     # close result file
     result_file.close()
 

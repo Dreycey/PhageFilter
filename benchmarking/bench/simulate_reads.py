@@ -67,16 +67,46 @@ def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfil
                            outfile=outfile, readlength=readlength, error_rate=error_rate)
     return outfile
 
-def get_read_counts(simreads_path: Path):
-    """
-    This method obtains the read counts from a simulated reads
-    file.
-    """
-    number_of_reads_regex = re.search(r'_c(\d+)_', simreads_path)
-    if number_of_reads_regex:
-        number_of_reads = int(number_of_reads_regex.group(1))
-    else:
-        print(f"ERROR: not able to parse read count from {simreads_path}")
-        exit(1)
 
-    return number_of_reads
+class SimReadParser:
+    """ class contains methods for parsing simulated read files """
+
+    @staticmethod
+    def get_read_counts(simreads_path: Path):
+        """
+        This method obtains the read counts from a simulated reads
+        file.
+        """
+        number_of_reads_regex = re.search(r'_c(\d+)_', simreads_path)
+        if number_of_reads_regex:
+            number_of_reads = int(number_of_reads_regex.group(1))
+        else:
+            print(f"ERROR: not able to parse read count from {simreads_path}")
+            exit(1)
+
+        return number_of_reads
+
+    def get_genome_counts(simreads_path: Path):
+        """
+        This method obtains the genome counts from a simulated reads
+        file.
+        """
+        regex_match = re.search(r'_n(\d+)_', simreads_path)
+        if regex_match:
+            return int(regex_match.group(1))
+        else:
+            print(f"ERROR: not able to parse genome count from {simreads_path}")
+            exit(1)
+
+    @staticmethod
+    def get_error_rate(simreads_path: Path):
+        """
+        This method obtains the error rate from a simulated reads file
+        file.
+        """
+        regex_match = re.search(r'_e([\d.]+).fq', simreads_path)
+        if regex_match:
+            return float(regex_match.group(1))
+        else:
+            print(f"ERROR: not able to parse (error rate): {simreads_path}")
+            exit(1)
