@@ -26,8 +26,10 @@ import shutil
 # custom libraries
 import bench.utils as utils
 from bench.utils import BenchmarkResult, Experiment
-from bench.tools import PhageFilter, Kraken2, FastViromeExplorer
 import bench.simulate_reads as simulate_reads
+from bench.tools.kraken2 import Kraken2
+from bench.tools.fastviromeexplorer import FastViromeExplorer
+from bench.tools.phage_filter import PhageFilter 
 
 
 def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 5):
@@ -160,7 +162,6 @@ def benchtest_parameter_sweep(phagefilter: PhageFilter, test_directory: Path, ph
     """
     # perform a parameterization for kmer_size and theta.
     with open(result_csv, "w+") as result_file:
-
         # write output CSV header
         result_file.write("kmer size" + ",")
         result_file.write("theta" + ",")
@@ -203,6 +204,9 @@ def benchtest_parameter_sweep(phagefilter: PhageFilter, test_directory: Path, ph
                     recall, precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
                     read_count_error = utils.get_readcount_metrics(true_map=truth_map, out_map=result_map)
 
+                    # delete output directory
+                    shutil.rmtree(output_file)
+
                     # save to file
                     result_file.write(f"{kmer_size}" + ",")
                     result_file.write(f"{theta}" + ",")
@@ -235,23 +239,26 @@ def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: 
         kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
     fve = FastViromeExplorer(tool_path=configuration["FastViromeExplorer"]["tool_path"], kmer_size=configuration[
                                 "FastViromeExplorer"]["kmer_size"], list_file_path=configuration["FastViromeExplorer"]["list_file_path"])
-    tools = {"FastViromeExplorer": fve,
-                "Kraken2": kraken2, "PhageFilter": phagefilter}
+
+    # map from toolname to tool adapter
+    tools = {
+             "FastViromeExplorer": fve, 
+             "PhageFilter": phagefilter,
+             "Kraken2": kraken2, 
+            }
 
     # build DBs, if not exists
     for toolname, tool in tools.items():
         tool_DB = configuration[toolname]["database_name"]
         if not os.path.exists(tool_DB):
             tool_build_cmd = tool.build(tool_DB, genome_path)
-            tool_build_result: BenchmarkResult = utils.run_command(
-                tool_build_cmd)
+            tool_build_result: BenchmarkResult = utils.run_command(tool_build_cmd)
         else:
             tool.db_path = tool_DB
 
     # benchmark on test files.
     with open(result_csv, "w+") as result_file:
-        result_file.write(
-            "tool name, test name, time, memory, recall, precision, read count error\n")
+        result_file.write("tool name, test name, time, memory, recall, precision, read count error\n")
         for test_file in os.listdir(test_directory):
             test_file_path = os.path.join(test_directory, test_file)
             truth_map = utils.get_true_maps(test_file_path)
@@ -260,13 +267,17 @@ def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: 
                 output_path = f"{tool_name}_{test_name}"
                 run_cmd = tool.run(test_file_path, output_path)
                 run_result: BenchmarkResult = utils.run_command(run_cmd)
+
                 # benchmark
-                result_map = tool.parse_output(
-                    output_path, genomes_path=genome_path)
-                recall, precision = utils.get_classification_metrics(
-                    true_map=truth_map, out_map=result_map)
-                read_count_error = utils.get_readcount_metrics(
-                    true_map=truth_map, out_map=result_map)
+                result_map = tool.parse_output(output_path, genomes_path=genome_path)
+                recall, precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
+                read_count_error = utils.get_readcount_metrics(true_map=truth_map, out_map=result_map)
+
                 # save to file
-                result_file.write(
-                    f"{tool_name}, {test_name}, {run_result.elapsed_time}, {run_result.max_memory}, {recall}, {precision}, {np.average(read_count_error)}\n")
+                result_file.write(f"{tool_name}" + ",")
+                result_file.write(f"{test_name}" + ",")
+                result_file.write(f"{run_result.elapsed_time}" + ",")
+                result_file.write(f"{run_result.max_memory}" + ",")
+                result_file.write(f"{recall}" + ",")
+                result_file.write(f"{precision}" + ",")
+                result_file.write(f"{np.average(read_count_error)}" + "\n")

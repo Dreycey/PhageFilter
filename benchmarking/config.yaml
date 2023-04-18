@@ -1,7 +1,7 @@
 PhageFilter:
   database_name: "tree_3"
-  kmer_size: 45
-  theta: 0.6
+  kmer_size: 40
+  theta: 0.5
 Kraken2:
   database_name: "krakenDB/"
   kmer_size: 35

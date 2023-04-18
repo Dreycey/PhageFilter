@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 import argparse
 # custom libraries
-from bench.tools import PhageFilter
+from bench.tools.phage_filter import PhageFilter
 import bench.benchmarking_tests as bench_test
 
 
