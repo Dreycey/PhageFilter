@@ -21,6 +21,7 @@ import argparse
 from enum import Enum
 import tempfile
 import shutil
+import re
 # in house libraries
 from bench.utils import Experiment, parse_fasta
 
@@ -65,3 +66,17 @@ def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfil
             simulate_reads(genome=genome, name=name, read_count=read_count_per_genome,
                            outfile=outfile, readlength=readlength, error_rate=error_rate)
     return outfile
+
+def get_read_counts(simreads_path: Path):
+    """
+    This method obtains the read counts from a simulated reads
+    file.
+    """
+    number_of_reads_regex = re.search(r'_c(\d+)_', simreads_path)
+    if number_of_reads_regex:
+        number_of_reads = int(number_of_reads_regex.group(1))
+    else:
+        print(f"ERROR: not able to parse read count from {simreads_path}")
+        exit(1)
+
+    return number_of_reads
