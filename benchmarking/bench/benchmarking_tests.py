@@ -457,8 +457,8 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
                     test_name = f"filter_test_{contamination_percentage}"
 
                     # use pos and neg genome set to simulate contaminated reads.
-                    pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count, pos_read_count, "posreads", error_rate=0.1)
-                    neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, "negreads", error_rate=0)
+                    pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count, pos_read_count, f"posreads_{test_name}", error_rate=0.1)
+                    neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}", error_rate=0)
                     combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                     # get true maps
@@ -489,3 +489,5 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
                         result_file.write(f"{run_result.max_memory}" + ",")
                         result_file.write(f"{recall}" + ",")
                         result_file.write(f"{precision}" + "\n")
+                    # remove output
+                    utils.delete_files_with_string(test_name)

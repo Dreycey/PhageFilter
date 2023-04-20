@@ -28,17 +28,17 @@ python3 benchmarking/bench.py parameterization -g examples/genomes/viral_genome_
 
 * classification benchmarking
 ```
-python3 benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -r res_relative_performance.csv -t examples/test_reads/ -c benchmarking/config.yaml
+python3 benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -t examples/test_reads/ -c benchmarking/config.yaml -r res_relative_performance.csv
 ```
 
 * filter performance benchmarking
 ```
-python3 benchmarking/bench.py filter_performance -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -r res_relative_performance.csv -t examples/test_reads/ -c benchmarking/config.yaml
+python3 benchmarking/bench.py filter_performance -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -t examples/test_reads/ -c benchmarking/config.yaml -r res_filter_performance.csv
 ```
 
 * filter memory benchmarking
 ```
-python3 benchmarking/bench.py filter_memory -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -r res_relative_performance.csv -t examples/test_reads/ -c benchmarking/config.yaml
+python3 benchmarking/bench.py filter_memory -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -t examples/test_reads/ -c benchmarking/config.yaml -r res_filter_memory.csv
 ```
 """
 # standard libraries
