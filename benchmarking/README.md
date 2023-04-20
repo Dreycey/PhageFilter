@@ -6,13 +6,13 @@ This directory contains the benchmarking pipeline used for benchmarking the Memo
 
 ## Tool installation
 
-#### PhageFilter
+### PhageFilter
 Follow the steps in the README.md - run the following:
 ```
 cargo build --release
 ```
 
-#### Kraken2
+### Kraken2
 
 1. Use conda to install
 ```
@@ -20,7 +20,7 @@ conda install -c bioconda kraken2
 ```
 2. Build - visit https://github.com/DerrickWood/kraken2
 
-#### FastViromeExplorer
+### FastViromeExplorer
 These are the steps to build FVE. Of note, the path needs to be changed within the `config.yaml`.
 
 1. Obtain from git and compile
@@ -63,7 +63,7 @@ sudo cp samtools /usr/local/bin/;
 cd ../;
 ```
 
-#### FACS
+### FACS
 The FACS version used should work (this paper resulted in a change to the FACS repo!)
 
 1. Clone from github
@@ -78,7 +78,7 @@ make;
 ```
 * then copy `facs/facs/facs` (i.e. the executable) to your bin (`cp facs/facs ~/bin`)
 
-#### BioBloomTools
+### BioBloomTools
 The conda installation from BioBloomTools was used for benchmarking.
 
 ```
