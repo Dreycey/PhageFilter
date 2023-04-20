@@ -1,7 +1,7 @@
 PhageFilter:
-  database_name: "tree_3"
-  kmer_size: 40
-  theta: 0.5
+  database_name: "tree_10010"
+  kmer_size: 10
+  theta: 0.4
 Kraken2:
   database_name: "krakenDB/"
   kmer_size: 35
@@ -12,3 +12,10 @@ FastViromeExplorer:
   kmer_size: 31
   tool_path: "FastViromeExplorer/"
   list_file_path: "ncbi-viruses-list.txt"
+FACS:
+  database_name: "facs_bloom"
+  kmer_size: 10
+  theta: 0.3
+BioBloomTools:
+  database_name: "bbt_bloom"
+  kmer_size: 10
