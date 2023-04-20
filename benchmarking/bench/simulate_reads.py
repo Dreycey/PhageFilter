@@ -19,6 +19,7 @@ import random
 from pathlib import Path
 import argparse
 from enum import Enum
+from typing import List, Tuple, Dict
 import tempfile
 import shutil
 import re
@@ -54,9 +55,12 @@ def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfil
     """
     Simulates reads for multiple genomes.
     """
-    #print(genome_directory, number_of_genomes,read_count, outfile, readlength, error_rate)
+    # create name for  the file.
     simulate_reads_genomes = "simread_genomes/"
     outfile = Path(str(outfile) + f"_c{read_count}_n{number_of_genomes}_e{error_rate}.fq")
+    # remove file if already exists
+    if os.path.isfile(outfile):
+        os.remove(outfile)
     # create subset of sampled genomes, and simulate reads from each.
     read_count_per_genome = int(read_count / number_of_genomes)
     with Experiment(number_of_genomes, genome_directory, simulate_reads_genomes) as exp:
@@ -67,6 +71,21 @@ def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfil
                            outfile=outfile, readlength=readlength, error_rate=error_rate)
     return outfile
 
+def combine_files(fasta_paths_list: List[Path], output_file):
+    """
+    Combine a list of fasta files into one.
+    """
+    # remove file if already exists
+    if os.path.isfile(output_file):
+        os.remove(output_file)
+    # combine fasta files.
+    with open(output_file, 'w') as outfile:
+        for file_path in fasta_paths_list:
+            if os.path.isfile(file_path):
+                with open(file_path, 'r') as infile:
+                    outfile.write(infile.read())
+                    #outfile.write('\n')
+    return Path(output_file)
 
 class SimReadParser:
     """ class contains methods for parsing simulated read files """
