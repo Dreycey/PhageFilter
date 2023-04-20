@@ -114,6 +114,89 @@ def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, p
                     utils.delete_files_with_string(test_file_path)
                     utils.delete_files_with_string(output_path)
 
+
+def benchtest_threads_testing(pos_genome_path: Path, neg_genome_path: Path, config, result_csv: Path, variation_count: int = 3, contamination_fraction =0.2, read_count=100000):
+    """_summary_
+    Performs benchmarking of PhageFilter, testing how threads changes timing.
+
+    Args:
+        UPDATE
+    """
+    # open config
+    configuration = yaml.load(open(f"{config}", "r"), Loader=yaml.SafeLoader)
+
+    # instantiate tool wrapper/adapter
+    phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], 
+                              filter_thresh=configuration["PhageFilter"]["theta"])
+    phagefilter_db = configuration["PhageFilter"]["database_name"] # name of output tree
+
+    # segment the number of genomes checked so that 10 variations (or 'variation_count') are tested.
+    number_of_genomes = len(os.listdir(pos_genome_path))
+    step_size = int(number_of_genomes/variation_count)+1
+
+    # get read counts from contamination fraction.
+    neg_read_count = contamination_fraction * read_count
+    pos_read_count = (1 - contamination_fraction) * read_count
+
+    # open the output file and write the header
+    with open(result_csv, "w+") as output_file:
+        # create output CSV header.
+        output_file.write("threads" + ",")
+        output_file.write("genome count" + ",")
+        output_file.write("read count" + ",")
+        output_file.write("build time (ns)" + ",")
+        output_file.write("build memory (bytes)" + ",")
+        output_file.write("query time (ns)" + ",")
+        output_file.write("query memory (bytes)" + "\n")
+
+        # benchmark impact of number of genomes on build.
+        for genome_count in range(step_size, number_of_genomes, step_size):
+            with Experiment(genome_count, pos_genome_path) as genome_subset:
+                for thread_count in range(1,10):
+                    # update threads
+                    phagefilter.threads = thread_count
+
+                    # run tool on tmp build directory
+                    genome_dir = Path(genome_subset.genome_dir())
+                    pf_build_cmd = phagefilter.build(phagefilter_db, genome_dir)
+                    build_result = utils.run_command(pf_build_cmd)
+
+                    # make test name
+                    test_name = f"threads_test_count{read_count}_genomes{number_of_genomes}"
+
+                    # use pos and neg genome set to simulate contaminated reads.
+                    pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count//2, pos_read_count, f"posreads_{test_name}")
+                    neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}")
+                    combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
+
+                    # truth should only contain positive results
+                    truth_map = utils.get_true_maps(pos_reads_path)
+
+                    # make output path 
+                    output_path = f"PhageFilter_{test_name}"
+
+                    # run tool
+                    run_cmd = phagefilter.run(combined_test_path, output_path, filter_reads=True)
+                    run_result: BenchmarkResult = utils.run_command(run_cmd)
+
+                    # benchmark
+                    result_map = phagefilter.parse_output(output_path)
+                    classification_recall, classification_precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
+                    result_map = phagefilter.parse_output(output_path, filter_reads=True)
+                    filter_recall, filter_precision = utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
+
+                    # save results to file
+                    output_file.write(f"{thread_count}" + ",")
+                    output_file.write(f"{genome_count}" + ",")
+                    output_file.write(f"{read_count}" + ",")
+                    output_file.write(f"{build_result.elapsed_time}" + ",")
+                    output_file.write(f"{build_result.max_memory}" + ",")
+                    output_file.write(f"{run_result.elapsed_time}" + ",")
+                    output_file.write(f"{run_result.max_memory}" + "\n")
+
+                    # remove output
+                    utils.delete_files_with_string(test_name)
+
 def benchtest_read_length_testing(pos_genome_path: Path, neg_genome_path: Path, config, result_csv: Path, variation_count: int = 2, contamination_fraction =0.2):
     """_summary_
     Performs benchmarking of PhageFilter, testing how the read length impacts accuracy.
