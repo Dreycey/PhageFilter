@@ -154,17 +154,17 @@ def benchtest_read_length_testing(pos_genome_path: Path, neg_genome_path: Path, 
                 pf_build_cmd = phagefilter.build(phagefilter_db, genome_dir)
                 build_result = utils.run_command(pf_build_cmd)
 
-                for read_count in [10000, 100000]:
+                for read_count in [1000, 10000]:
                     # get read counts from contamination fraction.
                     neg_read_count = contamination_fraction * read_count
                     pos_read_count = (1 - contamination_fraction) * read_count
-                    for read_length in [100, 1000, 10000, 100000]:
+                    for read_length in [100, 500, 1000, 5000, 10000, 20000]:
                         # make test name
                         test_name = f"readlen_test_{read_length}_count{read_count}_genomes{number_of_genomes}"
 
                         # use pos and neg genome set to simulate contaminated reads.
-                        pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count, pos_read_count, f"posreads_{test_name}", error_rate=0.1)
-                        neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}", error_rate=0)
+                        pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count//2, pos_read_count, f"posreads_{test_name}", error_rate=0.1, readlength=read_length)
+                        neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}", error_rate=0, readlength=read_length)
                         combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                         # truth should only contain positive results
@@ -181,7 +181,7 @@ def benchtest_read_length_testing(pos_genome_path: Path, neg_genome_path: Path, 
                         result_map = phagefilter.parse_output(output_path)
                         classification_recall, classification_precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
                         result_map = phagefilter.parse_output(output_path, filter_reads=True)
-                        filter_recall, filter_precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
+                        filter_recall, filter_precision = utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
 
                         # save results to file
                         output_file.write(f"{genome_count}" + ",")
@@ -195,7 +195,7 @@ def benchtest_read_length_testing(pos_genome_path: Path, neg_genome_path: Path, 
                         output_file.write(f"{filter_precision}" + "\n")
 
                         # remove output
-                        utils.delete_files_with_string(output_path)
+                        utils.delete_files_with_string(test_name)
 
 def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
     """_summary_
@@ -541,7 +541,7 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
                     test_name = f"filter_test_{contamination_percentage}"
 
                     # use pos and neg genome set to simulate contaminated reads.
-                    pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count, pos_read_count, f"posreads_{test_name}", error_rate=0.1)
+                    pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count, pos_read_count, f"posreads_{test_name}", error_rate=0.3)
                     neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}", error_rate=0)
                     combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
