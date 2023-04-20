@@ -76,7 +76,7 @@ def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, p
                 pf_build_cmd = phagefilter.build(phagefilter_db, genome_dir)
                 genomecount2Result[genome_count] = utils.run_command(pf_build_cmd)
                 print(f"before: {genome_dir}")
-                for read_count in [100, 1000, 10000, 100000]:
+                for read_count in [100, 1000, 10000, 100000, 1000000, 10000000]:
                     # simulate reads and get true genome counts.
                     test_file_path = simulate_reads.multi_simulate(genome_dir, step_size, read_count, "simreads")
                     truth_map = utils.get_true_maps(test_file_path)
@@ -113,6 +113,89 @@ def benchtest_performance_testing(phagefilter: PhageFilter, genome_path: Path, p
                     # remove output
                     utils.delete_files_with_string(test_file_path)
                     utils.delete_files_with_string(output_path)
+
+def benchtest_read_length_testing(pos_genome_path: Path, neg_genome_path: Path, config, result_csv: Path, variation_count: int = 2, contamination_fraction =0.2):
+    """_summary_
+    Performs benchmarking of PhageFilter, testing how the read length impacts accuracy.
+
+    Args:
+        UPDATE
+    """
+    # open config
+    configuration = yaml.load(open(f"{config}", "r"), Loader=yaml.SafeLoader)
+
+    # instantiate tool wrapper/adapter
+    phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], 
+                              filter_thresh=configuration["PhageFilter"]["theta"])
+    phagefilter_db = configuration["PhageFilter"]["database_name"] # name of output tree
+
+    # segment the number of genomes checked so that 10 variations (or 'variation_count') are tested.
+    number_of_genomes = len(os.listdir(pos_genome_path))
+    step_size = int(number_of_genomes/variation_count)+1
+
+    # open the output file and write the header
+    with open(result_csv, "w+") as output_file:
+        # create output CSV header.
+        output_file.write("genome count" + ",")
+        output_file.write("read count" + ",")
+        output_file.write("read length" + ",")
+        output_file.write("query time (ns)" + ",")
+        output_file.write("query memory (bytes)" + ",")
+        output_file.write("recall (classification)" + ",")
+        output_file.write("precision (classification)" + ",")
+        output_file.write("recall (filter)" + ",")
+        output_file.write("precision (filter)" + "\n")
+
+        # benchmark impact of number of genomes on build.
+        for genome_count in range(step_size, number_of_genomes, step_size):
+            with Experiment(genome_count, pos_genome_path) as genome_subset:
+                # run tool on tmp build directory
+                genome_dir = Path(genome_subset.genome_dir())
+                pf_build_cmd = phagefilter.build(phagefilter_db, genome_dir)
+                build_result = utils.run_command(pf_build_cmd)
+
+                for read_count in [10000, 100000]:
+                    # get read counts from contamination fraction.
+                    neg_read_count = contamination_fraction * read_count
+                    pos_read_count = (1 - contamination_fraction) * read_count
+                    for read_length in [100, 1000, 10000, 100000]:
+                        # make test name
+                        test_name = f"readlen_test_{read_length}_count{read_count}_genomes{number_of_genomes}"
+
+                        # use pos and neg genome set to simulate contaminated reads.
+                        pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), genome_count, pos_read_count, f"posreads_{test_name}", error_rate=0.1)
+                        neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}", error_rate=0)
+                        combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
+
+                        # truth should only contain positive results
+                        truth_map = utils.get_true_maps(pos_reads_path)
+
+                        # make output path 
+                        output_path = f"PhageFilter_{test_name}"
+
+                        # run tool
+                        run_cmd = phagefilter.run(combined_test_path, output_path, filter_reads=True)
+                        run_result: BenchmarkResult = utils.run_command(run_cmd)
+
+                        # benchmark
+                        result_map = phagefilter.parse_output(output_path)
+                        classification_recall, classification_precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
+                        result_map = phagefilter.parse_output(output_path, filter_reads=True)
+                        filter_recall, filter_precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
+
+                        # save results to file
+                        output_file.write(f"{genome_count}" + ",")
+                        output_file.write(f"{read_count}" + ",")
+                        output_file.write(f"{read_length}" + ",")
+                        output_file.write(f"{run_result.elapsed_time}" + ",")
+                        output_file.write(f"{run_result.max_memory}" + ",")
+                        output_file.write(f"{classification_recall}" + ",")
+                        output_file.write(f"{classification_precision}" + ",")
+                        output_file.write(f"{filter_recall}" + ",")
+                        output_file.write(f"{filter_precision}" + "\n")
+
+                        # remove output
+                        utils.delete_files_with_string(output_path)
 
 def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilter_db: Path, result_csv: Path, variation_count: int = 10):
     """_summary_
@@ -378,7 +461,8 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
                 # benchmark
                 result_map = tool.parse_output(output_path, genomes_path=combined_test_path, filter_reads=True)
                 recall, precision = utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
-
+                utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
+                
                 # remove output
                 utils.delete_files_with_string(output_path)
 
