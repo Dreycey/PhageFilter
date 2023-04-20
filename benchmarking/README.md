@@ -99,6 +99,16 @@ python3 benchmarking/bench.py performance_testing -g examples/genomes/viral_geno
 python3 benchmarking/bench.py genomecount -g examples/genomes/viral_genome_dir/ -r res_genomes.csv
 ```
 
+#### perform threading tests
+```
+python3 benchmarking/bench.py threads -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_threading.csv
+```
+
+#### read length benchmarking
+```
+python3 benchmarking/bench.py readlength -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_readlength.csv
+```
+
 #### running parameterization benchmarking
 ```
 python3 benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -t examples/test_reads/ -r res_parameterization.csv
