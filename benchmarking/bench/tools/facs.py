@@ -3,9 +3,10 @@ This contains the python wrapper for FACS
 """
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
+from collections import Counter
 from typing import List, Tuple, Dict
 import sys
-
+import os
 
 class FACS(ToolOp):
 
@@ -20,8 +21,9 @@ class FACS(ToolOp):
         self.theta = filter_thresh
         self.threads = threads
         self.db_path = None
+        self.suffix = ".bloom"
 
-    def parse_output(self, output_path: Path, genomes_path: Path = None) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of FACS.
@@ -34,14 +36,41 @@ class FACS(ToolOp):
             List[]
         """
         read_set = []
-        full_out_path = output_path + "sim_reads_c10000_n10_e0.1_output_name_clean.fastq"
+        # parse output file name
+        test_file_name = output_path.strip("FACS_")
+        full_out_path = f"{output_path}{test_file_name}_{self.db_path[:-len(self.suffix)]}_contam.fastq"
+
+        # create counter.
+        read_counter = Counter()
+
+        # parse output file.
         with open(full_out_path, "r") as opened_file:
             line = opened_file.readline()
             while line:
                 if line[0] == "@":
-                    read_set.append(line.strip("@").strip("\n"))
+                    genome_name = "_".join(line.strip("@").strip("\n").split("_")[0:2])
+                    read_counter[genome_name] += 1
                 line = opened_file.readline()
-        return read_set
+
+        return read_counter
+
+    @staticmethod
+    def combine_files_into_one(genomes_path: Path, output_file):
+        """
+        Combine multiple fasta files into one file for
+        using with FACS build command.
+        """
+        # remove file if already exists
+        if os.path.isfile(output_file):
+            os.remove(output_file)
+        # combine
+        with open(output_file, 'w') as outfile:
+            for filename in os.listdir(genomes_path):
+                file_path = os.path.join(genomes_path, filename)
+                if os.path.isfile(file_path):
+                    with open(file_path, 'r') as infile:
+                        outfile.write(infile.read())
+                        outfile.write('\n')
 
     def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
         """_summary_
@@ -55,11 +84,11 @@ class FACS(ToolOp):
             List[List[str]]: a nested list of command line arguments.
         """
         # make bloom filter
-        self.db_path = db_path+".bloom"
+        self.db_path = db_path+self.suffix
         tmp_file_name = "TMP_DELETE.fa"
 
         # combine genomes into one file
-        genome_build = [f"cat {genomes_path}/*", ">", f"{tmp_file_name}"]
+        FACS.combine_files_into_one(genomes_path, tmp_file_name)
 
         # make command
         build_cmd = ["facs", "build"]
@@ -71,7 +100,7 @@ class FACS(ToolOp):
         # remove tmp file
         rm_genome_build = [f"rm", f"{tmp_file_name}"]
 
-        return [genome_build, build_cmd, rm_genome_build]
+        return [build_cmd, rm_genome_build]
 
     def run(self, fasta_file: Path, output_path: Path, filter_reads=False):
         """_summary_
@@ -85,7 +114,7 @@ class FACS(ToolOp):
             N/A.
         """
         if not self.db_path:
-            print("Must first build (PhageFilter)")
+            print("Must first build (FACS)")
             exit()
         run_cmd = ["facs", "remove"]
         run_cmd += ["-r", f"{self.db_path}"]

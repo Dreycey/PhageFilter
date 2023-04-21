@@ -4,7 +4,12 @@ This contains the python wrapper for BioBloomTools
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
 from typing import List, Tuple, Dict
+import subprocess
 import sys
+import os
+from collections import Counter
+
+
 
 
 class BioBloomTools(ToolOp):
@@ -20,7 +25,7 @@ class BioBloomTools(ToolOp):
         self.threads = threads
         self.db_path = None
 
-    def parse_output(self, output_path: Path, genomes_path: Path = None) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.
@@ -32,22 +37,33 @@ class BioBloomTools(ToolOp):
         Returns:
             Dict[str, int]: A map from NCBI ID to read count
         """
-        name2counts = {}
-        with open(output_path + "_summary.tsv") as out_file:
-            out_file.readline() # skip first
-            line = out_file.readline()
-            count = 0
-            while line:
-                name, count = line.strip("\n").split("\t")[:2]
-                name2counts[name] = int(count)
+        if filter_reads:
+            read_counter = Counter()
+            with open(f"{output_path}.fa", "r") as opened_file:
+                line = opened_file.readline()
+                while line:
+                    if line[0] == ">":
+                        genome_name = "_".join(line.strip(">").split("\t")[0].split("_")[:-1])
+                        read_counter[genome_name] += 1
+                    line = opened_file.readline()
+            return read_counter
+        else:
+            name2counts = {}
+            with open(output_path + "_summary.tsv") as out_file:
+                out_file.readline() # skip first
                 line = out_file.readline()
+                count = 0
+                while line:
+                    name, count = line.strip("\n").split("\t")[:2]
+                    name2counts[name] = int(count)
+                    line = out_file.readline()
 
-        # remove non genome columns
-        del name2counts['repeat']
-        del name2counts['noMatch']
-        del name2counts['multiMatch']
+            # remove non genome columns
+            del name2counts['repeat']
+            del name2counts['noMatch']
+            del name2counts['multiMatch']
 
-        return name2counts
+            return name2counts
 
     def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
         """_summary_
@@ -62,10 +78,12 @@ class BioBloomTools(ToolOp):
         """
         build_cmd = ["biobloommimaker"]
         build_cmd += ["--file_prefix", f"{db_path}"]
-        build_cmd += ["--hash_num", f"{10}"] 
+        build_cmd += ["--hash_num", f"{100}"] 
         build_cmd += ["--kmer_size", f"{self.k}"]
         build_cmd += ["--threads", f"{self.threads}"]
-        build_cmd += [f"$(ls {genomes_path}/*)"]
+        for filename in os.listdir(genomes_path):
+            filepath = os.path.join(genomes_path, filename)
+            build_cmd += [f"{filepath}"]
 
         self.db_path = db_path+".bf"
 
@@ -89,12 +107,15 @@ class BioBloomTools(ToolOp):
         run_cmd += ["--filter", f"{self.db_path}"]
         run_cmd += ["--multi", f"{2}"] # how many reads per genome
         run_cmd += ["--prefix", f"{output_path}"] # prefix
-        run_cmd += ["--min_FPR", f"{100}"] # Minimum -10*log(FPR) threshold for a match
+        run_cmd += ["--min_FPR", f"{2}"] # Minimum -10*log(FPR) threshold for a match
         run_cmd += ["--threads", f"{self.threads}"]
         run_cmd += [f"{fasta_file}"]
         if filter_reads:
             run_cmd += ["--hitOnly", "--fa"]
-            run_cmd += [">", f"{output_path}_POS.fa"]
+            output_file = f"{output_path}.fa"
+            with open(output_file, "w") as out:
+                subprocess.run(run_cmd, stdout=out, check=True)
+    
         return [run_cmd]
 
 if __name__ == "__main__":

@@ -4,13 +4,14 @@ This contains the python wrapper for PhageFilter
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
 from typing import List, Tuple, Dict
+from collections import Counter
 
 
 
 
 class PhageFilter(ToolOp):
 
-    def __init__(self, kmer_size: int, filter_thresh: float, threads=1):
+    def __init__(self, kmer_size: int, filter_thresh: float, threads=4):
         """_summary_
 
         Args:
@@ -23,7 +24,7 @@ class PhageFilter(ToolOp):
         self.threads = threads
         self.db_path = None
 
-    def parse_output(self, output_path: Path, genomes_path: Path = None, cuttoff=0.025) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.025) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.
@@ -35,21 +36,32 @@ class PhageFilter(ToolOp):
         Returns:
             Dict[str, int]: A map from NCBI ID to read count
         """
-        name2counts = {}
-        with open(output_path + "/CLASSIFICATION.csv") as out_file:
-            line = out_file.readline()
-            count = 0
-            while line:
-                name, count = line.strip("\n").split(",")
-                name2counts[name] = int(count)
+        if filter_reads:
+            read_counter = Counter()
+            with open(output_path + "/POS_FILTERING.fa", "r") as opened_file:
+                line = opened_file.readline()
+                while line:
+                    if line[0] == ">":
+                        genome_name = "_".join(line.strip(">").split(" ")[0].split("_")[:-1])
+                        read_counter[genome_name] += 1
+                    line = opened_file.readline()
+            return read_counter
+        else:
+            name2counts = {}
+            with open(output_path + "/CLASSIFICATION.csv") as out_file:
                 line = out_file.readline()
+                count = 0
+                while line:
+                    name, count = line.strip("\n").split(",")
+                    name2counts[name] = int(count)
+                    line = out_file.readline()
 
-        # filter based on read count threshold
-        # total_reads_classified = sum(name2counts.values())
-        # name2counts = {
-        #     k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
+            # filter based on read count threshold
+            # total_reads_classified = sum(name2counts.values())
+            # name2counts = {
+            #     k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
 
-        return name2counts
+            return name2counts
 
     def build(self, db_path: Path, genomes_path: Path, cache_size=100) -> List[List[str]]:
         """_summary_
@@ -74,7 +86,7 @@ class PhageFilter(ToolOp):
 
         return [build_cmd]
 
-    def run(self, fasta_file: Path, output_path: Path, cache_size=10, filter_reads=False):
+    def run(self, fasta_file: Path, output_path: Path, cache_size=100, filter_reads=False):
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 
@@ -93,7 +105,7 @@ class PhageFilter(ToolOp):
         run_cmd += ["--db-path", f"{self.db_path}"]
         run_cmd += ["--filter-threshold", f"{self.theta}"]
         run_cmd += ["--cache-size", f"{cache_size}"]
-        run_cmd += ["--block-size-reads", f"{1000}"]
+        run_cmd += ["--block-size-reads", f"{100}"]
         run_cmd += ["--out", f"{output_path}"]
         run_cmd += ["--threads", f"{self.threads}"]
         if filter_reads:
