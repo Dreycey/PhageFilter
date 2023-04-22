@@ -50,6 +50,11 @@ python3 benchmarking/bench.py filter_performance -g examples/genomes/viral_genom
 ```
 python3 benchmarking/bench.py filter_memory -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -t examples/test_reads/ -c benchmarking/config.yaml -r res_filter_memory.csv
 ```
+
+* depth testing
+```
+python3 benchmarking/bench.py depth -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_depth.csv
+```
 """
 # standard libraries
 from enum import Enum
@@ -72,6 +77,7 @@ class SubparserNames(Enum):
     filter_memory = "filter_memory"
     readlength = "readlength"
     threads = "threads"
+    depth = "depth"
 
 def add_common_arguments(subparser):
     subparser.add_argument("-g", "--genome_dir", type=Path, help="Path to the genome directory", required=True)
@@ -115,7 +121,6 @@ def parseArgs(argv=None) -> argparse.Namespace:
     # if filter memory & time bench
     filter_memory_parser = subparsers.add_parser(SubparserNames.filter_memory.value)
     filter_memory_parser.add_argument("-n", "--neg_genome_dir", type=Path, help="path to the contamination genome directory", required=True)
-    filter_memory_parser.add_argument("-t", "--test_directory", type=Path, help="path to the directory with simulated test reads.", required=True)
     filter_memory_parser.add_argument("-c", "--config", type=Path, help="path to the configuration file", required=True)
     add_common_arguments(filter_memory_parser)
 
@@ -131,6 +136,12 @@ def parseArgs(argv=None) -> argparse.Namespace:
     threads_parser.add_argument("-c", "--config", type=Path, help="path to the configuration file", required=True)
     add_common_arguments(threads_parser)
 
+    # readlength test
+    depth_parser = subparsers.add_parser(SubparserNames.depth.value)
+    depth_parser.add_argument("-n", "--neg_genome_dir", type=Path, help="path to the contamination genome directory", required=True)
+    depth_parser.add_argument("-c", "--config", type=Path, help="path to the configuration file", required=True)
+    add_common_arguments(depth_parser)
+
     return parser.parse_args(argv)
 
 
@@ -139,20 +150,29 @@ def main():
     def performance_testing_action():
         print(f"Performing parameterization benchmarking...")
         phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
-        bench_test.benchtest_performance_testing(
-            phagefilter=phagefilter, phagefilter_db=args.database_name, genome_path=args.genome_dir, result_csv=args.result_csv)
+        bench_test.benchtest_performance_testing(phagefilter=phagefilter, 
+                                                 phagefilter_db=args.database_name, 
+                                                 genome_path=args.genome_dir, 
+                                                 result_csv=args.result_csv)
         
     def parameterization_action():
         print(f"Performing parameterization benchmarking...")
         phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
-        bench_test.benchtest_parameter_sweep(
-            phagefilter, args.test_directory, args.database_name, args.genome_dir, args.result_csv)
+        bench_test.benchtest_parameter_sweep(phagefilter, 
+                                             args.test_directory, 
+                                             args.database_name,
+                                             args.genome_dir, 
+                                             args.result_csv)
 
     def genomecount_action():
         print(f"Performing genome count benchmarking...")
         phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
-        bench_test.benchtest_genomecount(phagefilter, args.genome_dir,
-                                                args.database_name, args.result_csv)
+        bench_test.benchtest_genomecount(phagefilter, 
+                                         args.genome_dir,
+                                         args.database_name, 
+                                         args.result_csv
+        )
+
     def readlength_action():
         print(f"Performing read length benchmarking...")
         bench_test.benchtest_read_length_testing(pos_genome_path=args.genome_dir,
@@ -176,8 +196,10 @@ def main():
     
     def relative_performance_action():
         print(f"Performing relative performance benchmarking...")
-        bench_test.benchtest_relative_performance(
-            args.genome_dir, args.config, args.result_csv, args.test_directory)
+        bench_test.benchtest_relative_performance(args.genome_dir, 
+                                                  args.config, 
+                                                  args.result_csv, 
+                                                  args.test_directory)
 
     def filter_performance_action():
         print(f"Performing filter performance benchmarking...")
@@ -198,11 +220,19 @@ def main():
             neg_genome_path=args.neg_genome_dir,
             config=args.config,
             result_csv=args.result_csv, 
-            test_directory=args.test_directory,
             contamination_fraction = 0.2, 
             variation_count = 10
         )
 
+    def depth_action():
+        print(f"Performing tree depth benchmarking...")
+        bench_test.benchtest_depth(pos_genome_path=args.genome_dir, 
+                                   neg_genome_path=args.neg_genome_dir, 
+                                   config=args.config, 
+                                   result_csv=args.result_csv, 
+                                   read_count=100000,
+                                   contamination_fraction=0.99
+        )
 
     # arguments
     args = parseArgs(sys.argv[1:])
@@ -217,6 +247,7 @@ def main():
         SubparserNames.filter_memory.value: filter_memory_action,
         SubparserNames.readlength.value: readlength_action,
         SubparserNames.threads.value: threads_action,
+        SubparserNames.depth.value: depth_action
     }
 
     # run benchmark type specified

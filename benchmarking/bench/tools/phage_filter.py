@@ -80,13 +80,13 @@ class PhageFilter(ToolOp):
         build_cmd += ["--kmer-size", f"{self.k}"]
         build_cmd += ["--cache-size", f"{cache_size}"]
         build_cmd += ["--false-pos-rate", f"{0.0001}"]
-        build_cmd += ["--largest-genome", f"{100000}"]
+        build_cmd += ["--largest-genome", f"{1000000}"]
         build_cmd += ["--threads", f"{self.threads}"]
         self.db_path = db_path
 
         return [build_cmd]
 
-    def run(self, fasta_file: Path, output_path: Path, cache_size=100, filter_reads=False):
+    def run(self, fasta_file: Path, output_path: Path, cache_size=100, filter_reads=False, depth=None):
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 
@@ -108,6 +108,8 @@ class PhageFilter(ToolOp):
         run_cmd += ["--block-size-reads", f"{100}"]
         run_cmd += ["--out", f"{output_path}"]
         run_cmd += ["--threads", f"{self.threads}"]
+        if depth != None:
+            run_cmd += ["--search-depth", f"{depth}"]
         if filter_reads:
             run_cmd += ["--pos-filter"]
 
