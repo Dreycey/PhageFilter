@@ -101,7 +101,7 @@ class Kraken2(ToolOp):
 
         return build_cmds
 
-    def run(self, fasta_file: Path, output_path: Path) -> List[List[str]]:
+    def run(self, fasta_file: Path, output_path: Path, filter_reads=False) -> List[List[str]]:
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 

@@ -230,6 +230,7 @@ def delete_files_with_string(target_string, search_path="."):
     the target string. This function is useful for cleaning
     up the output from tools.
     """
+    print(f"trying to delete {target_string}")
     for root, dirs, files in os.walk(search_path):
         for name in files:
             if target_string in name:

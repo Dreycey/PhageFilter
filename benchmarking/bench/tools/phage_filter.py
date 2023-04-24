@@ -24,7 +24,7 @@ class PhageFilter(ToolOp):
         self.threads = threads
         self.db_path = None
 
-    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.025) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.01) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.

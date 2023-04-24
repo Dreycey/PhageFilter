@@ -106,7 +106,7 @@ class FastViromeExplorer(ToolOp):
                 line = fasta_file.readline()
         return genome_seq, len(genome_seq), ncbi_id
 
-    def run(self, fasta_file: Path, output_path: Path) -> List[List[str]]:
+    def run(self, fasta_file: Path, output_path: Path, filter_reads=False) -> List[List[str]]:
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 

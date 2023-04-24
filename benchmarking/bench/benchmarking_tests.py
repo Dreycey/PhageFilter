@@ -231,8 +231,7 @@ def benchtest_read_length_testing(pos_genome_path: Path, neg_genome_path: Path, 
         for genome_count in range(step_size, number_of_genomes, step_size):
             with Experiment(genome_count, pos_genome_path) as genome_subset:
                 # run tool on tmp build directory
-                genome_dir = Path(genome_subset.genome_dir())
-                pf_build_cmd = phagefilter.build(phagefilter_db, genome_dir)
+                pf_build_cmd = phagefilter.build(phagefilter_db, genome_subset.genome_dir())
                 build_result = utils.run_command(pf_build_cmd)
 
                 for read_count in [1000, 10000]:
@@ -319,22 +318,34 @@ def benchtest_genomecount(phagefilter: PhageFilter, genome_path: Path, phagefilt
                     output_file.write(f"{genomecount2Result[genome_count].elapsed_time}" + ",")
                     output_file.write(f"{genomecount2Result[genome_count].max_memory}" + "\n")
 
-def benchtest_parameter_sweep(phagefilter: PhageFilter, test_directory: Path, phagefilter_db: Path, genome_path: Path, result_csv: Path):
+def benchtest_parameter_sweep(pos_genome_path: Path, neg_genome_path: Path, config: Path, result_csv: Path, read_count=10000, contamination_fraction=0.3, variation_count: int = 3):
     """_summary_
     Performs a parameter sweep for different combinations of
     kmer size and theta. For each combination it saves the output
     to a given result_csv.
 
     Args:
-        phagefilter (PhageFilter): instance of PhageFilter
-        test_directory (Path): Path to directory of test reads (Fasta/Fastq)
-        phagefilter_db (Path): Path to the DB for benchmarking (will rewrite for each combination)
-        genome_path (Path): Path to the genome directory
-        result_csv (Path): Path to desired output file.
+        UPDATE
 
     Returns:
         N/A
     """
+    # open config
+    configuration = yaml.load(open(f"{config}", "r"), Loader=yaml.SafeLoader)
+
+    # create phagefilter instances
+    phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
+    phagefilter_db = configuration["PhageFilter"]["database_name"]
+
+    # segment the number of genomes checked so that 10 variations (or 'variation_count') are tested.
+    number_of_genomes = len(os.listdir(pos_genome_path))
+    number_of_negative_genomes = len(os.listdir(neg_genome_path))
+
+    # get read counts from contamination fraction.
+    neg_read_count = contamination_fraction * read_count
+    pos_read_count = (1 - contamination_fraction) * read_count
+    step_size = int(number_of_genomes/variation_count)
+
     # perform a parameterization for kmer_size and theta.
     with open(result_csv, "w+") as result_file:
         # write output CSV header
@@ -345,56 +356,78 @@ def benchtest_parameter_sweep(phagefilter: PhageFilter, test_directory: Path, ph
         result_file.write("read count" + ",")
         result_file.write("time" + ",")
         result_file.write("memory" + ",")
-        result_file.write("recall" + ",")
-        result_file.write("precision" + ",")
+        result_file.write("classification recall" + ",")
+        result_file.write("classification precision" + ",")
+        result_file.write("filter recall" + ",")
+        result_file.write("filter precision" + ",")
         result_file.write("avg read count error" + "\n")
         
-        for kmer_size in range(15, 51, 5):
-            # build a tree for each kmer_size
-            phagefilter.k = kmer_size  # update kmer_size
-            pf_build_cmd = phagefilter.build(phagefilter_db, genome_path)
-            utils.run_command(pf_build_cmd)
-            # test tree on kmer size for different thresholds.
-            theta_set = [theta / 10 for theta in range(0, 10, 2)]
-            for theta in theta_set:
-                for test_file in os.listdir(test_directory):
-                    test_file_path = os.path.join(test_directory, test_file)
-                    output_file = f"phagefilter_{kmer_size}_{theta}_{test_file}"
+        # iterate through different genome numbers (for DBs)
+        for genome_count in range(step_size, number_of_genomes+1, step_size):
+            with Experiment(genome_count, pos_genome_path) as genome_subset:
+                for kmer_size in range(15, 51, 5):
+                    print(f"new kmer size: {kmer_size}")
+                    # build a tree for each kmer_size
+                    phagefilter.k = kmer_size  # update kmer_size
+                    #utils.delete_files_with_string(phagefilter_db) # delete old DB
+                    pf_build_cmd = phagefilter.build(phagefilter_db, genome_subset.genome_dir())
+                    utils.run_command(pf_build_cmd)
 
-                    # parse output file
-                    error_rate = simulate_reads.SimReadParser.get_error_rate(test_file)
-                    number_of_genomes = simulate_reads.SimReadParser.get_genome_counts(test_file)
-                    number_of_reads = simulate_reads.SimReadParser.get_read_counts(test_file)
+                    # test different error rates
+                    for error_rate in [0.0, 0.02, 0.04, 0.06, 0.08, 0.1]:
+                        print(f"new error: {error_rate}")
 
-                    # update theta.
-                    phagefilter.theta = theta
+                        # test tree on kmer size for different thresholds.
+                        theta_set = [theta / 10 for theta in range(0, 11, 2)]
+                        for theta in theta_set:
+                            print(f"new theta: {theta}")
+                            # update theta.
+                            phagefilter.theta = theta
 
-                    # query
-                    pf_run_cmd = phagefilter.run(test_file_path, output_file)
-                    run_result: BenchmarkResult = utils.run_command(pf_run_cmd)
+                            # create output name
+                            output_file = f"phagefilter_{kmer_size}_{theta}_{error_rate}"
+                            print(f"\n\n  {output_file} \n\n")
 
-                    # benchmark
-                    truth_map = utils.get_true_maps(test_file_path)
-                    result_map = phagefilter.parse_output(output_file)
-                    recall, precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
-                    read_count_error = utils.get_readcount_metrics(true_map=truth_map, out_map=result_map)
+                            # simulate reads: use pos and neg genome set to simulate contaminated reads.
+                            print(f"number of genomes: {os.listdir(genome_subset.genome_dir())}")
+                            print(f"expected: {genome_count}")
+                            pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), max(genome_count//2, 1), pos_read_count, "posreads", error_rate=error_rate, out_dir="pos/")
+                            neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, number_of_negative_genomes, neg_read_count, "negreads", error_rate=error_rate, out_dir="neg/")
+                            combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{output_file}.fastq")
 
-                    # remove output
-                    utils.delete_files_with_string(output_file)
+                            # query
+                            pf_run_cmd = phagefilter.run(combined_test_path, output_file, filter_reads=True)
+                            run_result: BenchmarkResult = utils.run_command(pf_run_cmd)
 
-                    # save to file
-                    result_file.write(f"{kmer_size}" + ",")
-                    result_file.write(f"{theta}" + ",")
-                    result_file.write(f"{error_rate}" + ",")
-                    result_file.write(f"{number_of_genomes}" + ",")
-                    result_file.write(f"{number_of_reads}" + ",")
-                    result_file.write(f"{run_result.elapsed_time}" + ",")
-                    result_file.write(f"{run_result.max_memory}" + ",")
-                    result_file.write(f"{recall}" + ",")
-                    result_file.write(f"{precision}" + ",")
-                    result_file.write(f"{np.average(read_count_error)}" + "\n")
+                            # benchmark classification
+                            truth_map = utils.get_true_maps(pos_reads_path)
+                            result_map = phagefilter.parse_output(output_file)
+                            classification_recall, classification_precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
+                            read_count_error = utils.get_readcount_metrics(true_map=truth_map, out_map=result_map)
 
-def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: Path, test_directory: Path):
+                            # benchmark filtering
+                            truth_map = utils.get_true_maps(pos_reads_path) # duplicated for consistency.
+                            result_map = phagefilter.parse_output(output_file, filter_reads=True)
+                            filter_recall, filter_precision = utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
+
+                            # remove output
+                            #utils.delete_files_with_string(output_file)
+
+                            # save to file
+                            result_file.write(f"{kmer_size}" + ",")
+                            result_file.write(f"{theta}" + ",")
+                            result_file.write(f"{error_rate}" + ",")
+                            result_file.write(f"{genome_count}" + ",")
+                            result_file.write(f"{read_count}" + ",")
+                            result_file.write(f"{run_result.elapsed_time}" + ",")
+                            result_file.write(f"{run_result.max_memory}" + ",")
+                            result_file.write(f"{classification_recall}" + ",")
+                            result_file.write(f"{classification_precision}" + ",")
+                            result_file.write(f"{filter_recall}" + ",")
+                            result_file.write(f"{filter_precision}" + ",")
+                            result_file.write(f"{np.average(read_count_error)}" + "\n")
+
+def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path, config: Path, result_csv: Path, read_count=100000, contamination_fraction=0.3):
     """_summary_
     This function performs the relative performance benchmarking of PhageFilter,
     showing how accuracy and precision compare to other tools.
@@ -429,10 +462,18 @@ def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: 
     for toolname, tool in tools.items():
         tool_DB = configuration[toolname]["database_name"]
         if not os.path.exists(tool_DB):
-            tool_build_cmd = tool.build(tool_DB, genome_path)
+            tool_build_cmd = tool.build(tool_DB, pos_genome_path)
             tool_build_result: BenchmarkResult = utils.run_command(tool_build_cmd)
         else:
             tool.db_path = tool_DB
+
+    # segment the number of genomes checked so that 10 variations (or 'variation_count') are tested.
+    number_of_genomes = len(os.listdir(pos_genome_path))
+    number_of_negative_genomes = len(os.listdir(neg_genome_path))
+
+    # get read counts from contamination fraction.
+    neg_read_count = contamination_fraction * read_count
+    pos_read_count = (1 - contamination_fraction) * read_count
 
     # benchmark on test files.
     with open(result_csv, "w+") as result_file:
@@ -444,31 +485,42 @@ def benchtest_relative_performance(genome_path: Path, config: Path, result_csv: 
         result_file.write("precision" + ",")
         result_file.write("read count error" + "\n")
 
-        for test_file in os.listdir(test_directory):
-            test_file_path = os.path.join(test_directory, test_file)
-            truth_map = utils.get_true_maps(test_file_path)
-            test_name = test_file.strip('.fq')
-            for tool_name, tool in tools.items():
-                output_path = f"{tool_name}_{test_name}"
-                run_cmd = tool.run(test_file_path, output_path)
-                run_result: BenchmarkResult = utils.run_command(run_cmd)
+        # iterate through different genome numbers (for DBs)
+        for genome_count in range(5, number_of_genomes, 5):
+            for error_rate in [0.0, 0.01, 0.1]:
+                test_name = f"{error_rate}_{genome_count}"
 
-                # benchmark
-                result_map = tool.parse_output(output_path, genomes_path=genome_path)
-                recall, precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
-                read_count_error = utils.get_readcount_metrics(true_map=truth_map, out_map=result_map)
+                # simulate reads: use pos and neg genome set to simulate contaminated reads.
+                pos_reads_path = simulate_reads.multi_simulate(pos_genome_path, genome_count, pos_read_count, "posreads", error_rate=error_rate)
+                neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, number_of_negative_genomes, neg_read_count, "negreads", error_rate=error_rate)
+                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
+
+                # get truth map
+                truth_map = utils.get_true_maps(pos_reads_path)
+
+                # test all tools
+                for tool_name, tool in tools.items():
+                    output_path = f"{tool_name}_{test_name}"
+                    run_cmd = tool.run(combined_test_path, output_path)
+                    run_result: BenchmarkResult = utils.run_command(run_cmd)
+
+                    # benchmark
+                    result_map = tool.parse_output(output_path, genomes_path=pos_genome_path)
+                    print(f"\n\n {tool_name} -> {result_map} \n\n")
+                    recall, precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
+                    read_count_error = utils.get_readcount_metrics(true_map=truth_map, out_map=result_map)
+
+                    # save to file
+                    result_file.write(f"{tool_name}" + ",")
+                    result_file.write(f"{test_name}" + ",")
+                    result_file.write(f"{run_result.elapsed_time}" + ",")
+                    result_file.write(f"{run_result.max_memory}" + ",")
+                    result_file.write(f"{recall}" + ",")
+                    result_file.write(f"{precision}" + ",")
+                    result_file.write(f"{np.average(read_count_error)}" + "\n")
 
                 # remove output
-                utils.delete_files_with_string(output_path)
-
-                # save to file
-                result_file.write(f"{tool_name}" + ",")
-                result_file.write(f"{test_name}" + ",")
-                result_file.write(f"{run_result.elapsed_time}" + ",")
-                result_file.write(f"{run_result.max_memory}" + ",")
-                result_file.write(f"{recall}" + ",")
-                result_file.write(f"{precision}" + ",")
-                result_file.write(f"{np.average(read_count_error)}" + "\n")
+                #utils.delete_files_with_string(test_name)
 
 def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, config: Path, result_csv: Path, test_directory: Path, read_count=100000, variation_count: int = 10):
     """_summary_
@@ -574,13 +626,19 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
     configuration = yaml.load(open(f"{config}", "r"), Loader=yaml.SafeLoader)
 
     # create tool instances
+    kraken2 = Kraken2(kmer_size=configuration["Kraken2"]["kmer_size"])
+    fve = FastViromeExplorer(tool_path=configuration["FastViromeExplorer"]["tool_path"], 
+                             kmer_size=configuration["FastViromeExplorer"]["kmer_size"], 
+                             list_file_path=configuration["FastViromeExplorer"]["list_file_path"])
     phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
     facs = FACS(kmer_size=configuration["FACS"]["kmer_size"], filter_thresh=configuration["FACS"]["theta"])
     biobloomtools = BioBloomTools(kmer_size=configuration["BioBloomTools"]["kmer_size"])
 
     # map from toolname to tool adapter
     tools = {
+             "FastViromeExplorer": fve, 
              "PhageFilter": phagefilter,
+             "Kraken2": kraken2,
              "FACS": facs,
              "BioBloomTools": biobloomtools,
             }
@@ -590,6 +648,7 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
     number_of_negative_genomes = len(os.listdir(neg_genome_path))
     step_size = int(number_of_genomes/variation_count)+1
     contamination_percentage = int(contamination_fraction * 100)
+
     # benchmark on test files.
     with open(result_csv, "w+") as result_file:
         # create header for the output CSV
@@ -600,9 +659,7 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
         result_file.write("build memory" + ",")
         result_file.write("contamination percentage" + ",")
         result_file.write("query time" + ",")
-        result_file.write("query memory" + ",")
-        result_file.write("recall" + ",")
-        result_file.write("precision" + "\n")
+        result_file.write("query memory" + "\n")
 
         # iterate through different genome numbers (for DBs)
         for genome_count in range(step_size, number_of_genomes, step_size):
@@ -612,6 +669,8 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
                 for toolname, tool in tools.items():
                     print(toolname, tool)
                     tool_DB = configuration[toolname]["database_name"]
+                    utils.delete_files_with_string(tool_DB)
+                    print("DELTE")
                     tool_build_cmd = tool.build(tool_DB, genome_subset.genome_dir())
                     tool_build_result[toolname]: Dict[str, BenchmarkResult] = utils.run_command(tool_build_cmd)
                     print(tool_build_result[toolname].elapsed_time)
@@ -641,10 +700,6 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
                         run_cmd = tool.run(combined_test_path, output_path, filter_reads=True)
                         run_result: BenchmarkResult = utils.run_command(run_cmd)
 
-                        # benchmark
-                        result_map = tool.parse_output(output_path, genomes_path=combined_test_path, filter_reads=True)
-                        recall, precision = utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
-
                         # remove output
                         utils.delete_files_with_string(output_path)
 
@@ -656,9 +711,7 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
                         result_file.write(f"{tool_build_result[tool_name].max_memory}" + ",")
                         result_file.write(f"{contamination_percentage}" + ",")
                         result_file.write(f"{run_result.elapsed_time}" + ",")
-                        result_file.write(f"{run_result.max_memory}" + ",")
-                        result_file.write(f"{recall}" + ",")
-                        result_file.write(f"{precision}" + "\n")
+                        result_file.write(f"{run_result.max_memory}" + "\n")
                     # remove output
                     utils.delete_files_with_string(test_name)
 

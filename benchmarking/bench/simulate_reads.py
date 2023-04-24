@@ -51,21 +51,25 @@ def simulate_reads(genome, name, read_count, outfile, readlength=100, error_rate
             reads_added += 1
 
 
-def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfile, readlength=100, error_rate=0.0):
+def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfile, readlength=100, error_rate=0.0, out_dir="simread_genomes/"):
     """
     Simulates reads for multiple genomes.
     """
     # create name for  the file.
-    simulate_reads_genomes = "simread_genomes/"
     outfile = Path(str(outfile) + f"_c{read_count}_n{number_of_genomes}_e{error_rate}.fq")
     # remove file if already exists
     if os.path.isfile(outfile):
         os.remove(outfile)
+    
+    print(f"multi_simulate() - length of genome_directory: {len(os.listdir(genome_directory))}")
+    print(f"multi_simulate() - number of genomes to sample: {number_of_genomes}")
     # create subset of sampled genomes, and simulate reads from each.
     read_count_per_genome = int(read_count / number_of_genomes)
-    with Experiment(number_of_genomes, genome_directory, simulate_reads_genomes) as exp:
-        for fasta in os.listdir(exp.genome_dir()):
-            full_path = os.path.join(exp.genome_dir(), fasta)
+    with Experiment(number_of_genomes, genome_directory, out_dir) as exp:
+        genome_directory = exp.genome_dir()
+        for fasta in os.listdir(genome_directory):
+            print(os.listdir(genome_directory))
+            full_path = os.path.join(genome_directory, fasta)
             genome, name = parse_fasta(full_path)
             simulate_reads(genome=genome, name=name, read_count=read_count_per_genome,
                            outfile=outfile, readlength=readlength, error_rate=error_rate)
@@ -84,7 +88,6 @@ def combine_files(fasta_paths_list: List[Path], output_file):
             if os.path.isfile(file_path):
                 with open(file_path, 'r') as infile:
                     outfile.write(infile.read())
-                    #outfile.write('\n')
     return Path(output_file)
 
 class SimReadParser:
