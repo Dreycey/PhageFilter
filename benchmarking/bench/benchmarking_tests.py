@@ -669,8 +669,7 @@ def benchtest_filter_memory(pos_genome_path: Path, neg_genome_path: Path, config
                 for toolname, tool in tools.items():
                     print(toolname, tool)
                     tool_DB = configuration[toolname]["database_name"]
-                    utils.delete_files_with_string(tool_DB)
-                    print("DELTE")
+                    utils.delete_files_with_string(tool_DB.strip("/"))
                     tool_build_cmd = tool.build(tool_DB, genome_subset.genome_dir())
                     tool_build_result[toolname]: Dict[str, BenchmarkResult] = utils.run_command(tool_build_cmd)
                     print(tool_build_result[toolname].elapsed_time)
