@@ -19,6 +19,12 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: 3.x
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r benchmarking/requirements.txt
+
     - name: Run benchmarking tests 
       run: |
         python3 -m unittest discover -s benchmarking/ -p '*test*.py'
