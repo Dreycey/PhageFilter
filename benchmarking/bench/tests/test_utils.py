@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from bench.utils import compute_metrics, get_filter_metric_counts, get_classification_metric_counts,\
-    get_filter_metrics, get_classification_metrics
+    get_filter_metrics, get_classification_metrics, get_readcount_metrics
 
 class TestUtils(unittest.TestCase):
     def test_compute_metrics(self):
@@ -118,6 +118,30 @@ class TestUtils(unittest.TestCase):
         recall, precision = get_classification_metrics(true_map, out_map)
         self.assertEqual(3/4, recall)
         self.assertEqual(3/5, precision)
+
+    def test_readcount_metrics(self):
+        true_map = {
+            't1': 5729,
+            't2': 6233,
+            't3': 5720,
+            't4': 682,
+        }
+        out_map = Counter({
+            't1': true_map['t1'],
+            't2': true_map['t2'] - 500,
+            't3': true_map['t3'] + 500,
+            'xyz': 5262,
+        })
+        # The expected differences should all be zero or positive
+        expected_differences = [
+            true_map['t1'] - out_map['t1'],     # Should be 0
+            true_map['t2'] - out_map['t2'],     # Should be 500
+            out_map['t3'] - true_map['t3'],     # Should be 500
+        ]
+
+        diffs = get_readcount_metrics(true_map, out_map)
+        self.assertEqual(expected_differences, diffs)
+
 
 if __name__ == '__main__':
     unittest.main()
