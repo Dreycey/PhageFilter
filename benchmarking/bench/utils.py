@@ -161,7 +161,22 @@ def parse_fasta(file_name):
             count += 1
     return genome, name
 
-def get_filter_metric_counts(true_map: Dict[str, int], out_map: Dict[str, int]) -> Dict[str, float]:
+def compute_metrics(TP: int, FP: int, FN: int) -> Dict[str, float]:
+    """
+    Computes precision and recall metrics given a True Positive count (TP), False Positive count (FP),
+    and False Negative count (FN).
+    """
+    assert TP >= 0, "True Positive count cannot be negative"
+    assert FP >= 0, "False Positive count cannot be negative"
+    assert FN >= 0, "False Negative count cannot be negative"
+    recall = TP / (TP + FN) if TP + FN != 0 else 0
+    precision = TP / (TP + FP) if TP + FP != 0 else 0
+    return {
+        'recall': recall,
+        'precision': precision,
+    }
+
+def get_filter_metric_counts(true_map: Dict[str, int], out_map: Dict[str, int]) -> Dict[str, int]:
     """
     Given a true map, mapping genome names to number of read counts, and an out_map doing the same,
     the True Positives, False Positives, and False Negatives for filtered reads may be calculated.
@@ -193,14 +208,24 @@ def get_filter_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> Tup
     the recall and precision for filtered reads may be calculated.
     """
     counts = get_filter_metric_counts(true_map, out_map)
-    TP = counts['TP']
-    FP = counts['FP']
-    FN = counts['FN']
+    metrics = compute_metrics(counts['TP'], counts['FP'], counts['FN'])
+    return metrics['recall'], metrics['precision']
 
-    recall = TP / (TP + FN) if TP + FN != 0 else 0
-    precision = TP / (TP + FP) if TP + FP != 0 else 0
-
-    return recall, precision
+def get_classification_metric_counts(true_map: Dict[str, int], out_map: Dict[str, int]) -> Dict[str, int]:
+    """
+    Given a true map, mapping genome names to number of read counts, and an out_map doing the same,
+    the True Positives, False Positives, and False Negatives for classified reads may be calculated.
+    They are returned in a dictionary with the keys 'TP', 'FP', and 'FN' respectively. A genome is considered
+    classified if it is detected in at least one read.
+    """
+    TP = len(true_map.keys() & out_map.keys())
+    FP = len(out_map.keys() - true_map.keys())
+    FN = len(true_map.keys() - out_map.keys())
+    return {
+        'TP': TP,
+        'FP': FP,
+        'FN': FN,
+    }
 
 def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> Tuple[float, float]:
     """_summary_
