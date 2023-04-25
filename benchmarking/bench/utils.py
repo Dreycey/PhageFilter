@@ -25,6 +25,7 @@ import random
 import tempfile
 import shutil
 from collections import defaultdict
+import logging
 # third party libraries
 from dataclasses import dataclass
 
@@ -160,26 +161,46 @@ def parse_fasta(file_name):
             count += 1
     return genome, name
 
+def get_filter_metric_counts(true_map: Dict[str, int], out_map: Dict[str, int]) -> Dict[str, float]:
+    """
+    Given a true map, mapping genome names to number of read counts, and an out_map doing the same,
+    the True Positives, False Positives, and False Negatives for filtered reads may be calculated.
+    They are returned in a dictionary with the keys 'TP', 'FP', and 'FN' respectively.
+    """
+    # get true positive count
+    # We don't count hits above the true count to count as True Positives
+    TP = 0
+    for hit in true_map.keys():
+        TP += min(out_map.get(hit, 0), true_map[hit])
+        if out_map.get(hit, 0) > true_map[hit]:
+            logging.warning(f"Count of {hit} in the out_map ({out_map.get(hit,0)}) exceeded the count in the true_map"
+                            f"({true_map[hit]}). This should not happen for read filtering.")
+    # get false positive count
+    # We make sure to exclude "negative" FP counts from subtracting from the total FP count
+    FP = sum([max(0, out_map[hit] - true_map.get(hit, 0)) for hit in out_map.keys()])
+    # get false negative count
+    # We also make sure to exclude "negative" FN counts from subtracting from the total FN count
+    FN = sum([max(0, true_map[hit] - out_map.get(hit, 0)) for hit in true_map.keys()])  # diff
+    return {
+        'TP': TP,
+        'FP': FP,
+        'FN': FN,
+    }
+
 def get_filter_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> Tuple[float, float]:
     """
     Given a true map, mapping genome names to number of read counts, and an out_map doing the same,
     the recall and precision for filtered reads may be calculated.
     """
-    # get true positive count
-    true_hits = true_map.keys() & out_map.keys()
-    TP = sum([out_map[hit] for hit in true_hits])
-    # get false positive count
-    false_hits = out_map.keys() - true_map.keys()
-    FP = sum([out_map[hit] for hit in false_hits])
-    # get false negative count
-    missed_hits = true_map.keys() - out_map.keys()
-    FN = sum([(true_map[hit] - out_map[hit]) for hit in true_hits]) # diff
-    FN += sum([true_map[hit] for hit in missed_hits]) # hits not in out_map, but should be
+    counts = get_filter_metric_counts(true_map, out_map)
+    TP = counts['TP']
+    FP = counts['FP']
+    FN = counts['FN']
 
     recall = TP / (TP + FN) if TP + FN != 0 else 0
     precision = TP / (TP + FP) if TP + FP != 0 else 0
 
-    return recall, precision   
+    return recall, precision
 
 def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> Tuple[float, float]:
     """_summary_
