@@ -1,9 +1,9 @@
 import unittest
-
 from collections import Counter
-
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from bench.utils import get_filter_metric_counts
-
 
 class TestUtils(unittest.TestCase):
     def test_filter_metrics(self):
