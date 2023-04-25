@@ -27,4 +27,4 @@ jobs:
 
     - name: Run benchmarking tests 
       run: |
-        python -m unittest discover -s benchmarking/ -p '*test*.py'
+        python -m unittest discover -s benchmarking/bench/tests/ -p '*test*.py'
