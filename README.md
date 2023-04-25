@@ -1,5 +1,6 @@
-![workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/rust.yml/badge.svg)
+![software workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/rust.yml/badge.svg)
 ![Coverage](https://img.shields.io/badge/coverage-30.26%25-brightgreen.svg?style=flat-square)
+![benchmarking workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/benchmarking_tests.yaml/badge.svg)
 ![LISCENSE](https://img.shields.io/github/license/Dreycey/PhageFilter)
 
 ![phage filter logo](misc/PhageFilterLogo.png)
