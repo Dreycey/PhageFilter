@@ -41,8 +41,14 @@ class Experiment:
         self.seed = random.randint(0, sys.maxsize)
         random.seed(self.seed)
 
+        # create a tmp directory if it doesn't exist
+        tmp_directory_path = "./benchmarking/tmp/"
+        if not os.path.exists(tmp_directory_path):
+            os.makedirs(tmp_directory_path)
+            
         # Make a temporary directory that can hold the randomly sampled genome files
-        self.tmp_dir = tempfile.mkdtemp()
+        self.tmp_dir = tempfile.mkdtemp(dir=tmp_directory_path)
+        print(self.tmp_dir)
         genome_files = list(source_genomes_dir.iterdir())
         selected_genomes = random.sample(genome_files, num_genomes)
 
