@@ -1,17 +1,13 @@
 """
 Description:
-    This script is used to generate exact substrings of
-    a given genome (in fasta format).
+    This module defines functions for simualting reads. The current implemented method
+    does not produce reads simulated from a particular instrument, rather equally probable
+    fragments/substrings from the genome with defined error rates. The errors do not simulate
+    indels, rather simple substitutions as these are most common (ref below). This allows for
+    controlling the error rate, length, and other parameters for baseline testing.
 
-For more information, see:
-    python3 benchmarking/scripts/simulate_reads.py -h
+ref - https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3305602/
 
-Usage:
-    python3 benchmarking/scripts/simulate_reads.py single_genome -g <genome path - fasta> --c <number of total reads> -l <read length> -n <number of genomes> -e <error rate> -o <outfile name>
-    python3 benchmarking/scripts/simulate_reads.py multi_genome -g <genome directory> -c <number of total reads> -l <read length> -n <number of genomes> -e <error rate> -o <outfile prefix>
-Example:
-    python3 benchmarking/scripts/simulate_reads.py single_genome -g examples/genomes/viral_genome_dir/ -c 100 -o sim_reads.fq -l 100 -e 0.1
-    python3 benchmarking/scripts/simulate_reads.py single_genome -g examples/genomes/viral_genome_dir/GCF_000912115.1_ViralProj219123_genomic.fna -c 100 -o sim_reads.fq -l 100 -e 0.1
 """
 import os
 import sys
@@ -25,6 +21,7 @@ import shutil
 import re
 # in house libraries
 from bench.utils import Experiment, parse_fasta
+
 
 
 
@@ -57,12 +54,16 @@ def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfil
     """
     # create name for  the file.
     outfile = Path(str(outfile) + f"_c{read_count}_n{number_of_genomes}_e{error_rate}.fq")
+
     # remove file if already exists
     if os.path.isfile(outfile):
         os.remove(outfile)
     
+    # TODO: change the following to log statements.
+    print(f"multi_simulate() - genome_directory: {os.listdir(genome_directory)}")
     print(f"multi_simulate() - length of genome_directory: {len(os.listdir(genome_directory))}")
     print(f"multi_simulate() - number of genomes to sample: {number_of_genomes}")
+
     # create subset of sampled genomes, and simulate reads from each.
     read_count_per_genome = int(read_count / number_of_genomes)
     with Experiment(number_of_genomes, genome_directory, out_dir) as exp:
@@ -72,7 +73,7 @@ def multi_simulate(genome_directory: Path, number_of_genomes, read_count, outfil
             full_path = os.path.join(genome_directory, fasta)
             genome, name = parse_fasta(full_path)
             simulate_reads(genome=genome, name=name, read_count=read_count_per_genome,
-                           outfile=outfile, readlength=readlength, error_rate=error_rate)
+                           outfile=outfile, readlength=min(len(genome), readlength), error_rate=error_rate)
     return outfile
 
 def combine_files(fasta_paths_list: List[Path], output_file):

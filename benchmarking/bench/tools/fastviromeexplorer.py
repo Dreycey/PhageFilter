@@ -1,10 +1,16 @@
 """
-This contains the python wrapper for kraken2
+This contains the python wrapper for FastVirome Explorer.
+
+GitHub: https://github.com/saima-tithi/FastViromeExplorer
+
+Design Pattern: Template pattern.
 """
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
 from typing import List, Tuple, Dict
 import os
+
+
 
 
 class FastViromeExplorer(ToolOp):
@@ -25,7 +31,7 @@ class FastViromeExplorer(ToolOp):
     def parse_output(self, output_path: Path, genomes_path: Path) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
-        returns a dictionary of the output of PhageFilter.
+        returns a dictionary of the output of FastViromeExplorer.
 
         Args:
             output_path (Path): Path where the output of PhageFilter

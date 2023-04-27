@@ -1,5 +1,9 @@
 """
 This contains the python wrapper for FACS
+
+GitHub: https://github.com/SciLifeLab/facs
+
+Design Pattern: Template pattern.
 """
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
@@ -7,6 +11,9 @@ from collections import Counter
 from typing import List, Tuple, Dict
 import sys
 import os
+
+
+
 
 class FACS(ToolOp):
 

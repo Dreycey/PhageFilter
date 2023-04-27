@@ -45,10 +45,9 @@ class Experiment:
         tmp_directory_path = "./benchmarking/tmp/"
         if not os.path.exists(tmp_directory_path):
             os.makedirs(tmp_directory_path)
-            
+
         # Make a temporary directory that can hold the randomly sampled genome files
         self.tmp_dir = tempfile.mkdtemp(dir=tmp_directory_path)
-        print(self.tmp_dir)
         genome_files = list(source_genomes_dir.iterdir())
         selected_genomes = random.sample(genome_files, num_genomes)
 
@@ -79,10 +78,11 @@ class BenchmarkResult:
 
 
 def run_command(arguments: List) -> BenchmarkResult:
-    """_summary_
+    """
     run a subcommand from the command line.
     returns the running time and memory, along with the output
     path.
+    
     Each subcommand is wrapped in a new process to ensure memory is properly measured.
 
     Args:
@@ -98,7 +98,7 @@ def run_command(arguments: List) -> BenchmarkResult:
 
 
 def _run_command(arguments: List) -> BenchmarkResult:
-    """_summary_
+    """
     Actually runs a subcommand from the command line.
     returns the running time and memory, along with the output
     path.
@@ -130,7 +130,7 @@ def _run_command(arguments: List) -> BenchmarkResult:
 
 
 def get_true_maps(fasta_read_path: Path) -> Dict[str,  int]:
-    """_summary_
+    """
     Given a fasta path, returns a dictionary of true genomes and read counts
 
     Args:
@@ -234,7 +234,7 @@ def get_classification_metric_counts(true_map: Dict[str, int], out_map: Dict[str
     }
 
 def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> Tuple[float, float]:
-    """_summary_
+    """
     uses true map and PhageFilter map to obtain metrics
     of the classification accuracy.
 
@@ -256,7 +256,7 @@ def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]
 
 
 def get_readcount_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> List[int]:
-    """_summary_
+    """
     Method for determining the absolute diffrence in true read
     counts and a tools predicted read counts. This is important
     for understanding incorrectly mapped reads in addition to 

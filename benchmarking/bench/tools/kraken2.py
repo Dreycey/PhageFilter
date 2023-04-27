@@ -1,10 +1,15 @@
 """
 This contains the python wrapper for kraken2
+
+GitHub: https://github.com/DerrickWood/kraken2
+
+Design Pattern: Template pattern.
 """
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
 from typing import List, Tuple, Dict
 import os
+
 
 
 
@@ -78,7 +83,7 @@ class Kraken2(ToolOp):
         nucl_wgs_ftp = 'https://ftp.ncbi.nih.gov/pub/taxonomy/accession2taxid/nucl_gb.accession2taxid.gz'
         if not os.path.exists("nucl_gb.accession2taxid.gz"):
             build_cmds.append(["wget", f"{nucl_wgs_ftp}"])
-        build_cmds.append(["gzip", "-d", "nucl_gb.accession2taxid.gz"])
+        build_cmds.append(["gzip", "-dk", "nucl_gb.accession2taxid.gz"])
         build_cmds.append(["mv", "nucl_gb.accession2taxid", f"{db_path}taxonomy/nucl_gb.accession2taxid"])
 
         # add genomic files
@@ -131,19 +136,21 @@ class Kraken2(ToolOp):
         Returns:
             Dict[str, int]: An output dictionary mapping NCBI taxomony IDs to NCBI IDs
         """
-        ncbi2tax = {}
+        taxid2ncbi = {}
         for genome in os.listdir(genomes_path):
             with open(os.path.join(genomes_path, genome), 'r') as f:
                 line = f.readline()
                 while line:
                     if line.startswith(">"):
-                        ncbi = line.strip(">").strip("\n").split(
-                            "|kraken:taxid|")[1].strip()
-                        taxid = line.strip(">").strip(
-                            "\n").split(" ")[0].strip()
-                        if ncbi in ncbi2tax:
-                            ncbi2tax[ncbi].append(taxid)
+                        try:
+                            taxid = line.strip(">").strip("\n").split("|kraken:taxid|")[1].strip()
+                            ncbi = line.strip(">").strip("\n").split(" ")[0].strip()
+                        except:
+                            print(f"line: {line}")
+                            exit(1)
+                        if ncbi in taxid2ncbi:
+                            taxid2ncbi[taxid].append(ncbi)
                         else:
-                            ncbi2tax[ncbi] = [taxid]
+                            taxid2ncbi[taxid] = [ncbi]
                     line = f.readline()
-        return ncbi2tax
+        return taxid2ncbi

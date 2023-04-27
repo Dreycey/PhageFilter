@@ -1,5 +1,9 @@
 """
-This contains the python wrapper for BioBloomTools
+This contains the python wrapper for BioBloomTools.
+
+GitHub: https://github.com/bcgsc/biobloom
+
+Design Pattern: Template pattern.
 """
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
@@ -28,7 +32,7 @@ class BioBloomTools(ToolOp):
     def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
-        returns a dictionary of the output of PhageFilter.
+        returns a dictionary of the output of BioBloomTools.
 
         Args:
             output_path (Path): Path where the output of PhageFilter
@@ -78,14 +82,14 @@ class BioBloomTools(ToolOp):
         """
         build_cmd = ["biobloommimaker"]
         build_cmd += ["--file_prefix", f"{db_path}"]
-        build_cmd += ["--hash_num", f"{100}"] 
+        build_cmd += ["--hash_num", f"{50}"] 
         build_cmd += ["--kmer_size", f"{self.k}"]
         build_cmd += ["--threads", f"{self.threads}"]
         for filename in os.listdir(genomes_path):
             filepath = os.path.join(genomes_path, filename)
             build_cmd += [f"{filepath}"]
 
-        self.db_path = db_path+".bf"
+        self.db_path = db_path+".bf" # TODO: may benefit not adding the suffix, fine for now.
 
         return [build_cmd]
 
@@ -105,16 +109,18 @@ class BioBloomTools(ToolOp):
             exit()
         run_cmd = ["biobloommicategorizer"]
         run_cmd += ["--filter", f"{self.db_path}"]
-        run_cmd += ["--multi", f"{2}"] # how many reads per genome
+        run_cmd += ["--multi", f"{1.0}"] # how many reads per genome
         run_cmd += ["--prefix", f"{output_path}"] # prefix
-        run_cmd += ["--min_FPR", f"{2}"] # Minimum -10*log(FPR) threshold for a match
+        run_cmd += ["--min_FPR", f"{100}"] # Minimum -10*log(FPR) threshold for a match
         run_cmd += ["--threads", f"{self.threads}"]
         run_cmd += [f"{fasta_file}"]
         if filter_reads:
             run_cmd += ["--hitOnly", "--fa"]
+            # TODO: this is needed because the way utils works
+            # need to save the STDOUT to a fasta when filtering.
             output_file = f"{output_path}.fa"
             with open(output_file, "w") as out:
-                subprocess.run(run_cmd, stdout=out, check=True)
+                subprocess.run(run_cmd, stdout=out, check=True) 
     
         return [run_cmd]
 

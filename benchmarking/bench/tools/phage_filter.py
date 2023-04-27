@@ -1,5 +1,7 @@
 """
 This contains the python wrapper for PhageFilter
+
+Design Pattern: Template pattern.
 """
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
@@ -86,7 +88,7 @@ class PhageFilter(ToolOp):
 
         return [build_cmd]
 
-    def run(self, fasta_file: Path, output_path: Path, cache_size=100, filter_reads=False, depth=None):
+    def run(self, fasta_file: Path, output_path: Path, cache_size=10, filter_reads=False, depth=None):
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 
@@ -105,7 +107,7 @@ class PhageFilter(ToolOp):
         run_cmd += ["--db-path", f"{self.db_path}"]
         run_cmd += ["--filter-threshold", f"{self.theta}"]
         run_cmd += ["--cache-size", f"{cache_size}"]
-        run_cmd += ["--block-size-reads", f"{100}"]
+        run_cmd += ["--block-size-reads", f"{1000}"]
         run_cmd += ["--out", f"{output_path}"]
         run_cmd += ["--threads", f"{self.threads}"]
         if depth != None:
