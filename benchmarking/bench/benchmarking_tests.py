@@ -191,7 +191,7 @@ def benchtest_threads_testing(pos_genome_path: Path, neg_genome_path: Path, conf
                 number_of_genomes_to_sample = int(number_of_genomes * fraction2sample)
                 pos_reads_path = simulate_reads.multi_simulate(Path(pos_genome_path), max(number_of_genomes_to_sample, 1), pos_read_count, f"posreads_{test_name}")
                 neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}")
-                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"combined_{test_name}.fastq")
+                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                 # truth should only contain positive results
                 truth_map = utils.get_true_maps(pos_reads_path)
@@ -280,7 +280,7 @@ def benchtest_read_length_testing(pos_genome_path: Path, neg_genome_path: Path, 
                         number_of_genomes_to_sample = int(number_of_genomes * fraction2sample)
                         pos_reads_path = simulate_reads.multi_simulate(genome_subset.genome_dir(), max(number_of_genomes_to_sample, 1), pos_read_count, f"posreads_{test_name}", error_rate=0.1, readlength=read_length)
                         neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, 1, neg_read_count, f"negreads_{test_name}", error_rate=0, readlength=read_length)
-                        combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"combined_{test_name}.fastq")
+                        combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                         # truth should only contain positive results
                         truth_map = utils.get_true_maps(pos_reads_path)
@@ -538,7 +538,7 @@ def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path,
                 number_of_genomes_to_sample = int(number_of_genomes * fraction2sample)
                 pos_reads_path = simulate_reads.multi_simulate(pos_genome_path, max(number_of_genomes_to_sample, 1), pos_read_count, f"posreads_{test_name}", error_rate=error_rate)
                 neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, number_of_negative_genomes, neg_read_count, f"negreads_{test_name}", error_rate=error_rate)
-                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"combined_{test_name}.fastq")
+                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                 # get truth map. The only true genomes should 
                 # come from the genome dir used to build the tool DBs
@@ -594,9 +594,9 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
 
     # map from toolname to tool adapter
     tools = {
-             "PhageFilter": phagefilter,
+             #"PhageFilter": phagefilter,
              "FACS": facs,
-             "BioBloomTools": biobloomtools,
+             #"BioBloomTools": biobloomtools,
             }
 
     # build DBs
@@ -636,7 +636,7 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
                 number_of_genomes_to_sample = int(number_of_genomes * fraction2sample)
                 pos_reads_path = simulate_reads.multi_simulate(pos_genome_path, max(number_of_genomes_to_sample, 1), pos_read_count, f"posreads_{test_name}", error_rate=error_rate)
                 neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, number_of_negative_genomes, neg_read_count, f"negreads_{test_name}", error_rate=error_rate)
-                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"combined_{test_name}.fastq")
+                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                 # get true maps
                 truth_map = utils.get_true_maps(pos_reads_path)
@@ -752,7 +752,7 @@ def benchtest_memory(pos_genome_path: Path, neg_genome_path: Path, config: Path,
                     # use pos and neg genome set to simulate contaminated reads.
                     pos_reads_path = simulate_reads.multi_simulate(Path(genome_subset.genome_dir()), genome_count, pos_read_count, f"posreads_{test_name}", error_rate=0.3)
                     neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, number_of_negative_genomes, neg_read_count, f"negreads_{test_name}", error_rate=0)
-                    combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"combined_{test_name}.fastq")
+                    combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                     # get true maps
                     truth_map = utils.get_true_maps(pos_reads_path)
@@ -834,7 +834,7 @@ def benchtest_depth(pos_genome_path: Path, neg_genome_path: Path, config: Path, 
                 number_of_genomes_to_sample = int(number_of_genomes * fraction2sample)
                 pos_reads_path = simulate_reads.multi_simulate(pos_genome_path, max(number_of_genomes_to_sample, 1), pos_read_count, "posreads", error_rate=error_rate)
                 neg_reads_path = simulate_reads.multi_simulate(neg_genome_path, number_of_negative_genomes, neg_read_count, "negreads", error_rate=error_rate)
-                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"combined_{test_name}.fastq")
+                combined_test_path = simulate_reads.combine_files([pos_reads_path, neg_reads_path], f"{test_name}.fastq")
 
                 for depth in range(0, depth_of_tree+1):
                     # get true maps
