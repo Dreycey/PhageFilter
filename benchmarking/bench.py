@@ -13,7 +13,7 @@ Install / Dependencies:
 Examples:
 * performance benchmarking (when optimizing performance..)
 ```
-python3 benchmarking/bench.py performance_testing -g examples/genomes/viral_genome_dir/ -r res_performance_benchmarking.csv
+python3 benchmarking/bench.py performance_testing -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_performance_benchmarking.csv
 ```
 
 * running genome count benchmarking
@@ -48,7 +48,7 @@ python3 benchmarking/bench.py filter_performance -g examples/genomes/viral_genom
 
 * filter memory benchmarking
 ```
-python3 benchmarking/bench.py filter_memory -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_filter_memory.csv
+python3 benchmarking/bench.py memory -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_filter_memory.csv
 ```
 
 * depth testing
@@ -94,6 +94,8 @@ def parseArgs(argv=None) -> argparse.Namespace:
 
     # if performance testing
     performance_testing_parser = subparsers.add_parser(SubparserNames.performance_testing.value)
+    performance_testing_parser.add_argument("-n", "--neg_genome_dir", type=Path, help="path to the contamination genome directory", required=True)
+    performance_testing_parser.add_argument("-c", "--config", type=Path, help="path to the configuration file", required=True)
     add_common_arguments(performance_testing_parser)
 
     # if parameterization
@@ -149,11 +151,11 @@ def main():
 
     def performance_testing_action():
         print(f"Performing parameterization benchmarking...")
-        phagefilter = PhageFilter(kmer_size=args.kmer_size, filter_thresh=1.0)
-        bench_test.benchtest_performance_testing(phagefilter=phagefilter, 
-                                                 phagefilter_db=args.database_name, 
-                                                 genome_path=args.genome_dir, 
-                                                 result_csv=args.result_csv
+        bench_test.benchtest_performance_testing(pos_genome_path=args.genome_dir,
+                                                 neg_genome_path=args.neg_genome_dir,
+                                                 config=args.config,
+                                                 result_csv=args.result_csv, 
+                                                 variation_count=10
                                                  )
         
     def parameterization_action():
@@ -163,7 +165,7 @@ def main():
                                              config=args.config, 
                                              result_csv=args.result_csv,
                                              contamination_fraction = 0.5, 
-                                             read_count=100000
+                                             read_count=1000
                                              )
 
     def genomecount_action():
@@ -202,8 +204,8 @@ def main():
                                                   neg_genome_path=args.neg_genome_dir,
                                                   config=args.config, 
                                                   result_csv=args.result_csv,
-                                                  contamination_fraction = 0.5, 
-                                                  read_count=100000
+                                                  contamination_fraction = 0.5,
+                                                  read_count=1000
                                                   )
 
     def filter_performance_action():
@@ -234,7 +236,7 @@ def main():
                                    config=args.config, 
                                    result_csv=args.result_csv, 
                                    read_count=100000,
-                                   contamination_fraction=0.5
+                                   contamination_fraction=0.90
         )
 
     # arguments

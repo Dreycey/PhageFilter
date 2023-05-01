@@ -160,6 +160,8 @@ def parse_fasta(file_name):
         count = 0
         while line:
             if count > 0:
+                # if line[0] == ">": # only use one genome. assume non-multifasta.
+                #     break
                 genome += line.strip("\n")
             else:
                 name = line.strip(">").strip("\n").split(" ")[0]
@@ -253,7 +255,6 @@ def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]
     precision = TP / (TP + FP) if TP + FP != 0 else 0
 
     return recall, precision
-
 
 def get_readcount_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> List[int]:
     """

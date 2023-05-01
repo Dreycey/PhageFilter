@@ -40,7 +40,7 @@ def simulate_reads(genome, name, read_count, outfile, readlength=100, error_rate
             stop = start + readlength
             read = list(genome[start:stop])
             for base2change in range(0, len(read)):
-                if random.uniform(0, 1) < error_rate:
+                if random.uniform(0, 1) < error_rate: # dice roll - uniform probablility per base
                     read[base2change] = random.choice(["A", "C", "T", "G"])
             read = "".join(read)
             quality = ''.join(["#"]*len(read))

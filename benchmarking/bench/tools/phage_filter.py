@@ -26,7 +26,7 @@ class PhageFilter(ToolOp):
         self.threads = threads
         self.db_path = None
 
-    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.01) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.005) -> Dict[str, int]:
         """_summary_
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.
@@ -59,9 +59,9 @@ class PhageFilter(ToolOp):
                     line = out_file.readline()
 
             # filter based on read count threshold
-            # total_reads_classified = sum(name2counts.values())
-            # name2counts = {
-            #     k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
+            total_reads_classified = sum(name2counts.values())
+            name2counts = {
+                k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
 
             return name2counts
 
@@ -81,14 +81,14 @@ class PhageFilter(ToolOp):
         build_cmd += ["--db-path", f"{db_path}"]
         build_cmd += ["--kmer-size", f"{self.k}"]
         build_cmd += ["--cache-size", f"{cache_size}"]
-        build_cmd += ["--false-pos-rate", f"{0.0001}"]
-        build_cmd += ["--largest-genome", f"{1000000}"]
+        build_cmd += ["--false-pos-rate", f"{0.00001}"]
+        build_cmd += ["--largest-genome", f"{500000}"]
         build_cmd += ["--threads", f"{self.threads}"]
         self.db_path = db_path
 
         return [build_cmd]
 
-    def run(self, fasta_file: Path, output_path: Path, cache_size=10, filter_reads=False, depth=None):
+    def run(self, fasta_file: Path, output_path: Path, cache_size=1, filter_reads=False, depth=None):
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 

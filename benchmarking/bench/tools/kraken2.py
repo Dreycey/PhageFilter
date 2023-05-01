@@ -147,7 +147,7 @@ class Kraken2(ToolOp):
                             ncbi = line.strip(">").strip("\n").split(" ")[0].strip()
                         except:
                             print(f"line: {line}")
-                            exit(1)
+                            break # assumes non-multifasta
                         if ncbi in taxid2ncbi:
                             taxid2ncbi[taxid].append(ncbi)
                         else:

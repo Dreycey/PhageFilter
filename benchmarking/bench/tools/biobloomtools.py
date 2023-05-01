@@ -59,13 +59,14 @@ class BioBloomTools(ToolOp):
                 count = 0
                 while line:
                     name, count = line.strip("\n").split("\t")[:2]
-                    name2counts[name] = int(count)
+                    if int(count) > 0:
+                        name2counts[name] = int(count)
                     line = out_file.readline()
 
             # remove non genome columns
-            del name2counts['repeat']
-            del name2counts['noMatch']
-            del name2counts['multiMatch']
+            for code in ['repeat', 'noMatch', 'multiMatch']:
+                if code in name2counts:
+                    del name2counts[code]
 
             return name2counts
 
@@ -109,7 +110,7 @@ class BioBloomTools(ToolOp):
             exit()
         run_cmd = ["biobloommicategorizer"]
         run_cmd += ["--filter", f"{self.db_path}"]
-        run_cmd += ["--multi", f"{1.0}"] # how many reads per genome
+        run_cmd += ["--multi", f"{2.0}"] # how many reads per genome
         run_cmd += ["--prefix", f"{output_path}"] # prefix
         run_cmd += ["--min_FPR", f"{100}"] # Minimum -10*log(FPR) threshold for a match
         run_cmd += ["--threads", f"{self.threads}"]
@@ -120,7 +121,7 @@ class BioBloomTools(ToolOp):
             # need to save the STDOUT to a fasta when filtering.
             output_file = f"{output_path}.fa"
             with open(output_file, "w") as out:
-                subprocess.run(run_cmd, stdout=out, check=True) 
+                subprocess.run(run_cmd, stdout=out, check=True)
     
         return [run_cmd]
 
