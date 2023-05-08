@@ -247,14 +247,9 @@ def get_classification_metrics(true_map: Dict[str, int], out_map: Dict[str, int]
     Returns:
         Tuple[float, float]: An output of recall and precision
     """
-    TP = len(true_map.keys() & out_map.keys())
-    FP = len(out_map.keys() - true_map.keys())
-    FN = len(true_map.keys() - out_map.keys())
-
-    recall = TP / (TP + FN) if TP + FN != 0 else 0
-    precision = TP / (TP + FP) if TP + FP != 0 else 0
-
-    return recall, precision
+    counts = get_classification_metric_counts(true_map, out_map)
+    metrics = compute_metrics(counts['TP'], counts['FP'], counts['FN'])
+    return metrics['recall'], metrics['precision']
 
 def get_readcount_metrics(true_map: Dict[str, int], out_map: Dict[str, int]) -> List[int]:
     """
