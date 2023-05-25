@@ -1,2 +1,2 @@
-benchmarking/ linguist-vendored
+benchmarking/*py linguist-vendored
 *.ipynb linguist-vendored
