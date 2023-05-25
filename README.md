@@ -39,22 +39,33 @@ The user can set the verbosity level. Below are different options for verbosity,
 -vvvv show trace
 ```
 
+## Installation
+PhageFilter is written in Rust and uses the Cargo package manager for installing all dependencies. After [Installing Rust](https://www.rust-lang.org/tools/install), running the following command from the root directory will install all dependencies as well as compile the software.
+
+```
+cargo build --release
+```
+
+For easier calling, it is recomended the compiled executable, `target/release/phage_filter`, be stored in a `bin/` directory and added to the users environmental path.
+
 ## Examples
+These commands assume the user has moved the executable to the enironmental path. If not, call the binary (i.e. `target/release/phage_filter`) directly instead of `phage_filter`.
 
-1. Build the genomic sequence bloom tree (gSBT)
+
+1. **Build** the genomic sequence bloom tree (gSBT)
 
 ```bash
-cargo run -- build --genomes examples/genomes/viral_genome_dir/ --db-path tree
+target/release/phage_filter build --genomes examples/genomes/viral_genome_dir/ --db-path tree
 ```
 
-2. Add genomes to an already built gSBT
+2. **Query** reads
 
 ```bash
-cargo run -- add --genomes PATH/TO/OTHER/GENOMES/ --db-path tree/
+target/release/phage_filter query -r examples/test_reads/ -o genomes_in_file.csv -d tree/ -f 1.0
 ```
 
-3. Query examples
+3. **Add** *new* genomes to an already built gSBT
 
 ```bash
-cargo run -- query -r examples/test_reads/ -o genomes_in_file.csv -d tree/ -f 1.0
+target/release/phage_filter add --genomes PATH/TO/OTHER/GENOMES/ --db-path tree/
 ```
