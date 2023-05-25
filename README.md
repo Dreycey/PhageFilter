@@ -10,6 +10,7 @@
 PhageFilter uses a Sequence Bloom Tree (SBT) to filter bacteriophage reads from metagenomic files.
 
 ## Usage
+PhageFilter has three primary commands: (1) Build, (2) Query, and (3) Add. Each of these functions contains it's own set of required arguments that can be listed using the `--help` flag.
 
 ```
 Usage: phage_filter [OPTIONS] <COMMAND>
