@@ -1,0 +1,25 @@
+name: Benchmarking Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        pip3 install -r benchmarking/requirements.txt
+
+    - name: Run benchmarking tests 
+      run: |
+        python3 -m unittest discover -s benchmarking/bench/tests/ -p 'test*.py'
