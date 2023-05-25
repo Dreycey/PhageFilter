@@ -12,19 +12,12 @@ PhageFilter uses a Sequence Bloom Tree (SBT) to filter bacteriophage reads from 
 ## Usage
 
 ```
-A fast, simple, and efficient method for taxonomic classification.
+Usage: phage_filter [OPTIONS] <COMMAND>
 
-Usage: phage_filter [OPTIONS] --genomes <VALUE> --reads <VALUE> --out <VALUE>
-
-Options:
-  -g, --genomes <VALUE>    Path to genomes file or directory. (Fasta)
-  -r, --reads <VALUE>      Path to read file or directory of reads. (Fasta or Fastq, or dirs with both)
-  -o, --out <VALUE>        Path to output file. (Fasta)
-  -t, --threads <VALUE>    Number of threads to use for read matching [default: 4]
-  -k, --kmer_size <VALUE>  Size of the kmer to use; use with caution! [default: 20]
-  -q, --threshold <VALUE>  Filtering theshold (Number of kmers needed to pass) [default: 1.0]
-  -h, --help               Print help information
-  -V, --version            Print version information
+Commands:
+  build  Builds the BloomTree
+  add    Adds genomes to an already built BloomFilter
+  query  Queries a set of reads. (ran after building the bloom tree)
 ```
 
 ### Verbosity level
