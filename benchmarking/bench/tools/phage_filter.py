@@ -13,7 +13,7 @@ from collections import Counter
 
 class PhageFilter(ToolOp):
 
-    def __init__(self, kmer_size: int, filter_thresh: float, threads=4):
+    def __init__(self, kmer_size: int, filter_thresh: float, threads=1):
         """_summary_
 
         Args:
