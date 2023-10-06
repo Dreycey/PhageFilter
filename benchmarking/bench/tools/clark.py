@@ -6,6 +6,7 @@ ARE YOU  WATCHING ME?
 time how long iit takes me to code this.
 """
 from collections import Counter
+import shutil
 from bench.tools.tool_template import ToolOp
 from pathlib import Path
 from typing import List, Tuple, Dict
@@ -66,6 +67,12 @@ class Clark(ToolOp):
             db_path (Path): path to the database the tool needs.
             genomes_path (Path): path to the genomes the db will use for building.
         """
+        # delete database if it exists
+        if os.path.exists(db_path):
+            shutil.rmtree(db_path)
+        else:
+            os.makedirs(db_path)
+
         # set targets file path && update DB path
         self.targets_file = os.path.join(db_path, "targets.txt")
         self.db_path = db_path

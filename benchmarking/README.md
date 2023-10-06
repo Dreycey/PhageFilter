@@ -76,13 +76,28 @@ git clone https://github.com/SciLifeLab/facs.git
 cd facs;
 make;
 ```
-* then copy `facs/facs/facs` (i.e. the executable) to your bin (`cp facs/facs ~/bin`)
+* then copy `facs/facs/facs` (i.e. the executable) to your bin (`cp facs/facs /usr/local/bin/`)
 
 ### BioBloomTools
 The conda installation from BioBloomTools was used for benchmarking.
 
 ```
 conda install -c bioconda biobloomtools
+```
+
+### CLARK
+CLARK is a tool that is able to perform metagenomic classification. It only works on mac and linux.
+
+* Download the CLARK repository + unzip
+```
+wget http://clark.cs.ucr.edu/Download/CLARKV1.2.6.1.tar.gz;
+tar -xzvf CLARKV1.2.6.1.tar.gz
+```
+
+* Install the toolset
+```
+cd CLARKSCV1.2.6.1/;
+/install.sh;
 ```
 
 ## Usage

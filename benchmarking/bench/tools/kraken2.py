@@ -123,34 +123,3 @@ class Kraken2(ToolOp):
         run_cmd = ["kraken2", "--db", f"{self.db_path}",
                    f"{fasta_file}", "--report", f"{output_path}"]
         return [run_cmd]
-
-    @staticmethod
-    def get_taxid2ncbi(genomes_path: Path) -> Dict[str, int]:
-        """_summary_
-        This function is used for mapping taxonomy IDs to NCBI accessions. This is useful when
-        comparing the output of Kraken2 to PhageFilter.
-
-        Args:
-            genomes_path (Path): Path to the directory of genomes used to build the Kraken2 DB
-
-        Returns:
-            Dict[str, int]: An output dictionary mapping NCBI taxomony IDs to NCBI IDs
-        """
-        taxid2ncbi = {}
-        for genome in os.listdir(genomes_path):
-            with open(os.path.join(genomes_path, genome), 'r') as f:
-                line = f.readline()
-                while line:
-                    if line.startswith(">"):
-                        try:
-                            taxid = line.strip(">").strip("\n").split("|kraken:taxid|")[1].strip()
-                            ncbi = line.strip(">").strip("\n").split(" ")[0].strip()
-                        except:
-                            print(f"line: {line}")
-                            break # assumes non-multifasta
-                        if ncbi in taxid2ncbi:
-                            taxid2ncbi[taxid].append(ncbi)
-                        else:
-                            taxid2ncbi[taxid] = [ncbi]
-                    line = f.readline()
-        return taxid2ncbi

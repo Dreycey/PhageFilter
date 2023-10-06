@@ -19,3 +19,7 @@ FACS:
 BioBloomTools:
   database_name: "bbt_bloom"
   kmer_size: 10
+Clark:
+  database_name: "clarkDB/"
+  kmer_size: 31
+  tool_path: "benchmarking/CLARKSCV1.2.6.1/exe/CLARK"
