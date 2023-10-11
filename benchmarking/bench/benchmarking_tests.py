@@ -642,12 +642,15 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
     phagefilter = PhageFilter(kmer_size=configuration["PhageFilter"]["kmer_size"], filter_thresh=configuration["PhageFilter"]["theta"])
     facs = FACS(kmer_size=configuration["FACS"]["kmer_size"], filter_thresh=configuration["FACS"]["theta"])
     biobloomtools = BioBloomTools(kmer_size=configuration["BioBloomTools"]["kmer_size"])
+    clark = Clark(tool_path=configuration["Clark"]["tool_path"],
+                  kmer_size=configuration["Clark"]["kmer_size"])
 
     # map from toolname to tool adapter
     tools = {
              "PhageFilter": phagefilter,
-             "BioBloomTools": biobloomtools,
-             "FACS": facs,
+            #  "BioBloomTools": biobloomtools,
+            #  "FACS": facs,
+             "Clark": clark
             }
 
     # build DBs
@@ -718,7 +721,7 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
                     run_result: BenchmarkResult = utils.run_command(run_cmd)
 
                     # benchmark
-                    result_map = tool.parse_output(output_path, genomes_path=combined_test_path, filter_reads=True)
+                    result_map = tool.parse_output(output_path, genomes_path=pos_genome_path, filter_reads=True)
                     recall, precision = utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
                     utils.get_filter_metrics(true_map=truth_map, out_map=result_map)
 
