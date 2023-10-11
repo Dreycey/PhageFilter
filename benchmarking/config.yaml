@@ -1,7 +1,7 @@
 PhageFilter:
   database_name: "tree_10010"
-  kmer_size: 10
-  theta: 0.4
+  kmer_size: 20
+  theta: 0.3
 Kraken2:
   database_name: "krakenDB/"
   kmer_size: 35
@@ -22,4 +22,4 @@ BioBloomTools:
 Clark:
   database_name: "clarkDB/"
   kmer_size: 31
-  tool_path: "benchmarking/CLARKSCV1.2.6.1/exe/CLARK"
+  tool_path: "CLARK-l"

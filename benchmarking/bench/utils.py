@@ -128,6 +128,67 @@ def _run_command(arguments: List) -> BenchmarkResult:
 
     return BenchmarkResult(elapsed_time, used_memory)
 
+def save_abundance_mappings(mapping_dictionary: Dict[str,  int], outputfile: Path):
+    """
+    Saves an abundance dictionary to a specified path.
+
+    Args:
+        mapping_dictionary (Dict[str,  int]): Dictionary mapping ID to abundance.
+        outputfile (Path): Path to save file.
+    """
+    with open(outputfile, "w") as outfile:
+        for id_val, abundance in mapping_dictionary.items():
+            outfile.write(f"{id_val},{abundance}\n")
+
+def save_truth_information(outdir: Path, error_rate: float, viral_mapping_dictionary, bacterial_mapping_dictionary):
+    """
+    This function takes information from test files and 
+    saves the corresponding information to allow for transparent
+    comparisons of the results.
+
+    Args:
+        outdir (Path): the output directory for saving the results.
+        error_rate (float): the error rate the reads were simulated at.
+        viral_mapping_dictionary (Dict[str,  int]): mapping dictionary for the true viruses in the sample.
+        bacterial_mapping_dictionary (Dict[str,  int]): mapping dictionary for the contaminating bacteria in the sample.
+    """
+    # save viral genome information
+    viral_genome_count = len(viral_mapping_dictionary.keys())
+    viral_read_count = sum([count for count in viral_mapping_dictionary.values()])
+    viral_file_path = os.path.join(outdir, f"test_viral_{viral_genome_count}genomes_{error_rate}errorrate_{viral_read_count}reads.csv")
+    save_abundance_mappings(viral_mapping_dictionary, viral_file_path)
+
+    # save bacterial genome information
+    bacterial_genome_count = len(viral_mapping_dictionary.keys())
+    bacterial_read_count = sum([count for count in bacterial_mapping_dictionary.values()])
+    bacterial_file_path = os.path.join(outdir, f"test_bacterial_{bacterial_genome_count}genomes_{error_rate}errorrate_{bacterial_read_count}reads.csv")
+    save_abundance_mappings(bacterial_mapping_dictionary, bacterial_file_path)
+
+    # information to save
+    info2save = {
+        "error_rate" : error_rate,
+        "total_reads" : bacterial_read_count + viral_read_count,
+        "viral_genome_count" : viral_genome_count,
+        "viral_read_count" : viral_read_count,
+        "bacterial_genome_count" : bacterial_genome_count,
+        "bacterial_read_count" : bacterial_read_count,
+        "viral_path" : viral_file_path,
+        "bacterial_path" : bacterial_file_path
+
+    }
+
+    # File names saved
+    TEST_INFO_FILE = "test_information.csv"
+    full_output_path = os.path.join(outdir, TEST_INFO_FILE)
+    if not os.path.exists(full_output_path):
+        with open(full_output_path, "w") as outfile:
+            column_names = ",".join(info2save.keys())
+            outfile.write(f"{column_names}\n")
+
+    # counts of viruses, bacteria, total read count, genomes for each.
+    with open(full_output_path, "a") as outfile:
+            column_values = ",".join([str(val) for val in info2save.values()])
+            outfile.write(f"{column_values}\n")
 
 def get_true_maps(fasta_read_path: Path) -> Dict[str,  int]:
     """
@@ -144,8 +205,8 @@ def get_true_maps(fasta_read_path: Path) -> Dict[str,  int]:
     with open(fasta_read_path) as read_file:
         for line in read_file:
             if line[0] == "@":
-                name = "_".join(line.strip("@").strip("\n").split("_")[0:-1])
-                name2counts[name] += 1
+                genome_name = "_".join(line.strip("@").strip("\n").split("_")[0:-1])
+                name2counts[genome_name] += 1
 
     return name2counts
 

@@ -49,7 +49,7 @@ from bench.tools.fastviromeexplorer import FastViromeExplorer
 from bench.tools.phage_filter import PhageFilter 
 from bench.tools.facs import FACS
 from bench.tools.biobloomtools import BioBloomTools
-
+from bench.tools.clark import Clark
 
 
 
@@ -527,6 +527,8 @@ def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path,
                              kmer_size=configuration["FastViromeExplorer"]["kmer_size"], 
                              list_file_path=configuration["FastViromeExplorer"]["list_file_path"])
     biobloomtools = BioBloomTools(kmer_size=configuration["BioBloomTools"]["kmer_size"])
+    clark = Clark(tool_path=configuration["Clark"]["tool_path"],
+                  kmer_size=configuration["Clark"]["kmer_size"])
 
     # map from toolname to tool adapter
     tools = {
@@ -534,6 +536,7 @@ def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path,
              "PhageFilter": phagefilter,
              "Kraken2": kraken2,
              "BioBloomTools": biobloomtools,
+             "Clark": clark,
             }
 
     # build DBs
@@ -552,6 +555,12 @@ def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path,
     # get read counts from contamination fraction.
     neg_read_count = int(contamination_fraction * read_count)
     pos_read_count = read_count - neg_read_count
+
+    # If the directory exists, delete it (saving testing information)
+    test_results_path = Path(result_csv).stem
+    if os.path.exists(test_results_path):
+        shutil.rmtree(test_results_path)
+    os.mkdir(test_results_path)
 
     # benchmark on test files.
     with open(result_csv, "w+") as result_file:
@@ -578,6 +587,12 @@ def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path,
                 # get truth map. The only true genomes should
                 # come from the genome dir used to build the tool DBs
                 truth_map = utils.get_true_maps(pos_reads_path)
+
+                # save information about test files.
+                utils.save_truth_information(outdir=test_results_path, 
+                                             error_rate=error_rate, 
+                                             viral_mapping_dictionary=utils.get_true_maps(pos_reads_path), 
+                                             bacterial_mapping_dictionary=utils.get_true_maps(neg_reads_path))
 
                 # test all tools
                 for tool_name, tool in tools.items():
@@ -646,6 +661,12 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
     number_of_genomes = len(os.listdir(pos_genome_path))
     number_of_negative_genomes = len(os.listdir(neg_genome_path))
 
+    # If the directory exists, delete it (saving testing information)
+    test_results_path = Path(result_csv).stem
+    if os.path.exists(test_results_path):
+        shutil.rmtree(test_results_path)
+    os.mkdir(test_results_path)
+
     # benchmark on test files.
     with open(result_csv, "w+") as result_file:
         # create header for the output CSV
@@ -678,6 +699,12 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
 
                 # get true maps
                 truth_map = utils.get_true_maps(pos_reads_path)
+
+                # save information about test files.
+                utils.save_truth_information(outdir=test_results_path, 
+                                             error_rate=error_rate, 
+                                             viral_mapping_dictionary=utils.get_true_maps(pos_reads_path), 
+                                             bacterial_mapping_dictionary=utils.get_true_maps(neg_reads_path))
 
                 # iterate through tools
                 for tool_name, tool in tools.items():

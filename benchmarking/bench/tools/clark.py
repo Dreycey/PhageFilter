@@ -48,9 +48,9 @@ class Clark(ToolOp):
                 line = filter_file.readline()
                 total_reads += 1
 
-        # update to abundances
-        if not filter_reads:
-            read_counters = {name: count/total_reads for name, count in read_counters.items()}
+        # # update to abundances
+        # if not filter_reads:
+        #     read_counters = {name: count/total_reads for name, count in read_counters.items()}
 
         return read_counters
     
@@ -101,6 +101,7 @@ class Clark(ToolOp):
         genome_paths = []
         for genome in os.listdir(genome_dir):
             genome_path = os.path.join(genome_dir, genome)
+            genome_path = os.path.abspath(genome_path) 
             with open(genome_path, 'r') as genome_file:
                 line = genome_file.readline()
                 taxid = line.strip(">").strip("\n").split("|kraken:taxid|")[1].strip()
