@@ -648,8 +648,8 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
     # map from toolname to tool adapter
     tools = {
              "PhageFilter": phagefilter,
-            #  "BioBloomTools": biobloomtools,
-            #  "FACS": facs,
+             "BioBloomTools": biobloomtools,
+             "FACS": facs,
              "Clark": clark
             }
 

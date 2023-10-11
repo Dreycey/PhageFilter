@@ -211,11 +211,11 @@ def main():
     def filter_performance_action():
         print(f"Performing filter performance benchmarking...")
         bench_test.benchtest_filter_performance(
-            pos_genome_path=args.genome_dir, 
-            neg_genome_path=args.neg_genome_dir, 
-            config=args.config, 
-            result_csv=args.result_csv, 
-            read_count=100000,
+            pos_genome_path=args.genome_dir,
+            neg_genome_path=args.neg_genome_dir,
+            config=args.config,
+            result_csv=args.result_csv,
+            read_count=1000000,
         )
 
     def memory_action():
