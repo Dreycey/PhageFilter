@@ -205,7 +205,7 @@ def main():
                                                   config=args.config, 
                                                   result_csv=args.result_csv,
                                                   contamination_fraction = 0.5,
-                                                  read_count=1000
+                                                  read_count=1000000
                                                   )
 
     def filter_performance_action():

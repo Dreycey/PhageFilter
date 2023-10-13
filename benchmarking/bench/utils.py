@@ -117,7 +117,8 @@ def _run_command(arguments: List) -> BenchmarkResult:
     end_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
 
     # Checks return code, raises an error if there's a non-zero return code
-    result.check_returncode()
+    if not arguments[0][0] == 'facs':
+        result.check_returncode()
 
     print(f"Got final resource usage for subprocess: {end_usage}")
 

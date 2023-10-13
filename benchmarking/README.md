@@ -100,6 +100,19 @@ cd CLARKSCV1.2.6.1/;
 /install.sh;
 ```
 
+### other dependencies
+
+This benchmarking script should be ran on linux. For testing, we used Ubuntu (An azure VM). The following dependencies are needed:
+
+1. zip
+```
+sudo apt install zip
+```
+
+2. python
+For python, we recomended intalling using conda. In addition to python3, you will need several packages: (1) pyyaml, (2) numpy.
+
+
 ## Usage
 
 ### Benchmarking

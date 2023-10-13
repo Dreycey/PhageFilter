@@ -542,7 +542,11 @@ def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path,
     # build DBs
     for toolname, tool in tools.items():
         tool_DB = configuration[toolname]["database_name"]
-        utils.delete_files_with_string(tool_DB.strip("/")) # delete DB if exists
+        if os.path.exists(tool_DB):
+            if os.path.isfile(tool_DB):
+                os.remove(tool_DB)
+            else:
+                shutil.rmtree(tool_DB) # delete DB if exists
         tool_build_cmd = tool.build(tool_DB, pos_genome_path)
         tool_build_result: BenchmarkResult = utils.run_command(tool_build_cmd)
 
@@ -557,7 +561,7 @@ def benchtest_relative_performance(pos_genome_path: Path, neg_genome_path: Path,
     pos_read_count = read_count - neg_read_count
 
     # If the directory exists, delete it (saving testing information)
-    test_results_path = Path(result_csv).stem
+    test_results_path = Path(result_csv).parent / Path(result_csv).stem
     if os.path.exists(test_results_path):
         shutil.rmtree(test_results_path)
     os.mkdir(test_results_path)
@@ -656,7 +660,11 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
     # build DBs
     for toolname, tool in tools.items():
         tool_DB = configuration[toolname]["database_name"]
-        utils.delete_files_with_string(tool_DB.strip("/")) # delete DB if exists
+        if os.path.exists(tool_DB):
+            if os.path.isfile(tool_DB):
+                os.remove(tool_DB)
+            else:
+                shutil.rmtree(tool_DB) # delete DB if exists
         tool_build_cmd = tool.build(tool_DB, pos_genome_path)
         tool_build_result: BenchmarkResult = utils.run_command(tool_build_cmd)
 
@@ -665,7 +673,7 @@ def benchtest_filter_performance(pos_genome_path: Path, neg_genome_path: Path, c
     number_of_negative_genomes = len(os.listdir(neg_genome_path))
 
     # If the directory exists, delete it (saving testing information)
-    test_results_path = Path(result_csv).stem
+    test_results_path = Path(result_csv).parent / Path(result_csv).stem
     if os.path.exists(test_results_path):
         shutil.rmtree(test_results_path)
     os.mkdir(test_results_path)
