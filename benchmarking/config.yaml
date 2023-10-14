@@ -10,7 +10,7 @@ Kraken2:
 FastViromeExplorer:
   database_name: "/datadrive/fve_db.idx"
   kmer_size: 31
-  tool_path: "FastViromeExplorer/"
+  tool_path: "FastViromeExplorer/" # use the directory here
   list_file_path: "ncbi-viruses-list.txt"
 FACS:
   database_name: "facs_bloom"
@@ -22,4 +22,4 @@ BioBloomTools:
 Clark:
   database_name: "/datadrive/clarkDB/"
   kmer_size: 31
-  tool_path: "CLARK-l"
+  tool_path: "CLARK-l" # path to the binary for "CLARK-l"
