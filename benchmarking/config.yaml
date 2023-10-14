@@ -1,14 +1,14 @@
 PhageFilter:
-  database_name: "tree_10010"
+  database_name: "/datadrive/tree_10010"
   kmer_size: 20
   theta: 0.3
 Kraken2:
-  database_name: "krakenDB/"
+  database_name: "/datadrive/krakenDB/"
   kmer_size: 35
   minimizer_len: 31
   minimizer_spacing: 0
 FastViromeExplorer:
-  database_name: "fve_db.idx"
+  database_name: "/datadrive/fve_db.idx"
   kmer_size: 31
   tool_path: "FastViromeExplorer/"
   list_file_path: "ncbi-viruses-list.txt"
@@ -20,6 +20,6 @@ BioBloomTools:
   database_name: "bbt_bloom"
   kmer_size: 10
 Clark:
-  database_name: "clarkDB/"
+  database_name: "/datadrive/clarkDB/"
   kmer_size: 31
   tool_path: "CLARK-l"
