@@ -13,7 +13,7 @@ use File::Basename;
 use Getopt::Long;
 
 my $PROG = basename $0;
-my $KRAKEN2_DIR = "/home/dreycey/miniconda3/envs/phagefilter-benchmarking/libexec";
+my $KRAKEN2_DIR = "/home/azureuser/miniconda3/libexec";
 
 # Test to see if the executables got moved, try to recover if we can
 if (! -e "$KRAKEN2_DIR/classify") {
