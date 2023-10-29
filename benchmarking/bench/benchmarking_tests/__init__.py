@@ -1,0 +1,12 @@
+# relative performance tests for phagefilter
+from .benchmark_taxonomic_classification import TaxonomicBenchmark
+from .benchmark_read_filtering import FilterBenchmark
+
+# benchmarking tests for phagefilter
+from .benchmark_phagefilter_parameter_sweep import ParameterBenchmark
+from .benchmark_phagefilter_performance import PerformanceBenchmark
+from .benchmark_phagefilter_genome_count import GenomeCountBenchmark
+from .benchmark_phagefilter_readlength_testing import ReadLengthBenchmark
+from .benchmark_phagefilter_threads import ThreadsBenchmarking
+from .benchmark_phagefilter_tunable_depth import TunableDepthBenchmark
+from .benchmark_memory import MemoryBenchmark
