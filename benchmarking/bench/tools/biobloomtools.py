@@ -18,7 +18,7 @@ from collections import Counter
 
 class BioBloomTools(ToolOp):
 
-    def __init__(self, kmer_size: int, threads=1):
+    def __init__(self, kmer_size: int, database_name, threads=1):
         """_summary_
 
         Args:

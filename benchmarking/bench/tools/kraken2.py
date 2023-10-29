@@ -15,7 +15,7 @@ import os
 
 class Kraken2(ToolOp):
 
-    def __init__(self, kmer_size: int = 35, threads=1):
+    def __init__(self, database_name, minimizer_len = 31, minimizer_spacing: int = 7, kmer_size: int = 35, threads=1):
         """_summary_
 
         Args:
@@ -26,6 +26,8 @@ class Kraken2(ToolOp):
         self.k = kmer_size
         self.threads = threads
         self.db_path = None
+        self.minimizer_len = minimizer_len
+        self.minimizer_spacing = minimizer_spacing
 
     def parse_output(self, output_path: Path, genomes_path: Path) -> Dict[str, int]:
         """_summary_
@@ -53,7 +55,7 @@ class Kraken2(ToolOp):
                 line = out_file.readline()
         return name2counts
 
-    def build(self, db_path: Path, genomes_path: Path, minimizer_len: int = 31, minimizer_spacing: int = 7):
+    def build(self, db_path: Path, genomes_path: Path):
         """_summary_
         Build the tools database.
 
@@ -97,8 +99,8 @@ class Kraken2(ToolOp):
         build_cmd = ["kraken2-build", "--build"]
         build_cmd += ["--db", f"{db_path}"]
         build_cmd += ["--kmer-len", f"{self.k}"]
-        build_cmd += ["--minimizer-len", f"{minimizer_len}"]
-        build_cmd += ["--minimizer-spaces", f"{minimizer_spacing}"]
+        build_cmd += ["--minimizer-len", f"{self.minimizer_len}"]
+        build_cmd += ["--minimizer-spaces", f"{self.minimizer_spacing}"]
         build_cmds.append(build_cmd)
 
         # update DB path

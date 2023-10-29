@@ -17,7 +17,7 @@ import os
 
 class FACS(ToolOp):
 
-    def __init__(self, kmer_size: int, filter_thresh: float, threads=1):
+    def __init__(self, kmer_size: int, filter_thresh: float, database_name, threads=1):
         """_summary_
 
         Args:

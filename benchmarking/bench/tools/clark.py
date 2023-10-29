@@ -16,14 +16,14 @@ import os
 
 class Clark(ToolOp):
 
-    def __init__(self, tool_path, kmer_size: int=31, threads=1):
+    def __init__(self, tool_path, database_name, kmer_size: int=31, threads=1):
         """
         Initalize the wrapper for Clark.
         """
         self.kmer_size = kmer_size
         self.threads = threads
         self.tool_path = tool_path
-        self.db_path = None
+        self.db_path = database_name
         self.targets_file = None
 
     def parse_output(self, output_path: Path, genomes_path: Path, filter_reads=False) -> Dict[str, int]:

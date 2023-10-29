@@ -13,7 +13,7 @@ from collections import Counter
 
 class PhageFilter(ToolOp):
 
-    def __init__(self, kmer_size: int, filter_thresh: float, threads=1):
+    def __init__(self, kmer_size: int, filter_thresh: float, database_name, cache_size, threads=1, largest_genome=500000):
         """_summary_
 
         Args:
@@ -24,7 +24,9 @@ class PhageFilter(ToolOp):
         self.k = kmer_size
         self.theta = filter_thresh
         self.threads = threads
-        self.db_path = None
+        self.db_path = database_name
+        self.largest_genome = largest_genome
+        self.cache_size = cache_size
 
     def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.005) -> Dict[str, int]:
         """_summary_
@@ -65,7 +67,7 @@ class PhageFilter(ToolOp):
 
             return name2counts
 
-    def build(self, db_path: Path, genomes_path: Path, cache_size=100) -> List[List[str]]:
+    def build(self, db_path: Path, genomes_path: Path, fpr=0.00001) -> List[List[str]]:
         """_summary_
         Build the tools database.
 
@@ -80,9 +82,9 @@ class PhageFilter(ToolOp):
         build_cmd += ["--genomes", f"{genomes_path}"]
         build_cmd += ["--db-path", f"{db_path}"]
         build_cmd += ["--kmer-size", f"{self.k}"]
-        build_cmd += ["--cache-size", f"{cache_size}"]
-        build_cmd += ["--false-pos-rate", f"{0.00001}"]
-        build_cmd += ["--largest-genome", f"{500000}"]
+        build_cmd += ["--cache-size", f"{self.cache_size}"]
+        build_cmd += ["--false-pos-rate", f"{fpr}"]
+        build_cmd += ["--largest-genome", f"{self.largest_genome}"]
         build_cmd += ["--threads", f"{self.threads}"]
         self.db_path = db_path
 
