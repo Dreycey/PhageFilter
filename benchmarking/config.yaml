@@ -1,26 +1,32 @@
 PhageFilter:
-  database_name: "/datadrive/tree_10010"
+  database_name: "/datadrive/phagefilter_bench_tree"
   kmer_size: 20
   filter_thresh: 0.3
   cache_size: 100
+  threads: 1
 Kraken2:
   database_name: "/datadrive/krakenDB/"
   kmer_size: 35
   minimizer_len: 31
   minimizer_spacing: 0
+  threads: 1
 FastViromeExplorer:
   database_name: "/datadrive/fve_db.idx"
   kmer_size: 31
   tool_path: "FastViromeExplorer/" # use the directory here
   list_file_path: "ncbi-viruses-list.txt"
+  threads: 1
 FACS:
   database_name: "facs_bloom"
   kmer_size: 10
   filter_thresh: 0.3
+  threads: 1
 BioBloomTools:
   database_name: "bbt_bloom"
   kmer_size: 10
+  threads: 1
 Clark:
   database_name: "/datadrive/clarkDB/"
   kmer_size: 31
   tool_path: "CLARK-l" # path to the binary for "CLARK-l"
+  threads: 1
