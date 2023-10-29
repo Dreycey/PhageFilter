@@ -1,15 +1,6 @@
 """
 Benchmarking module for PhageFilter.
 
-Install / Dependencies:
-    1. Yaml - https://pyyaml.org/wiki/PyYAMLDocumentation
-    2. Kraken2 - https://github.com/DerrickWood/kraken2/wiki
-    3. FastViromeExplorer - https://code.vt.edu/saima5/FastViromeExplorer
-        3.A - install - javac -d bin src/*.java
-        3.B - get SamTools - https://fastviromeexplorer.readthedocs.io/en/latest/
-        3.C - get Kallisto - https://fastviromeexplorer.readthedocs.io/en/latest/
-    4. For PhageFilter, make sure to build on release mode before running
-
 Examples:
 * performance benchmarking (when optimizing performance..)
 ```
@@ -62,14 +53,11 @@ import sys
 from pathlib import Path
 import argparse
 
-# custom libraries
-from bench.tools.phage_filter import PhageFilter
-import bench.benchmarking_tests as bench_test
-
 # importing benchmarking tests
 from bench.benchmarking_tests import (ParameterBenchmark, TaxonomicBenchmark, FilterBenchmark, PerformanceBenchmark,
                                       GenomeCountBenchmark, ReadLengthBenchmark, ThreadsBenchmarking, TunableDepthBenchmark,
                                       MemoryBenchmark)
+
 
 
 class SubparserNames(Enum):
@@ -88,9 +76,6 @@ def add_common_arguments(subparser):
     subparser.add_argument("-n", "--neg_genome_dir", type=Path, help="path to the contamination genome directory", required=True)
     subparser.add_argument("-c", "--config", type=Path, help="path to the configuration file", required=True)
     subparser.add_argument("-r", "--result_csv", type=Path, help="Path to the result CSV (output)", required=True)
-    subparser.add_argument("-db", "--database_name", default=Path("tree1/"), nargs='?', type=Path, help="path to the DB to use [default 'tree2/']", required=False)
-    subparser.add_argument("-k", "--kmer_size", default=20, nargs='?', type=int, help="size of kmer to use for PhageFilter [default 20]", required=False)
-    subparser.add_argument("--threads", default=4, nargs='?', type=int, help="number of threads to use [Default 4]", required=False)
 
 def parseArgs(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -98,149 +83,59 @@ def parseArgs(argv=None) -> argparse.Namespace:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", "--verbose", action="store_true")
 
-    # if performance testing
-    performance_testing_parser = subparsers.add_parser(SubparserNames.performance_testing.value)
-    add_common_arguments(performance_testing_parser)
+    # List of all subparser names
+    subparser_names = [
+        SubparserNames.performance_testing.value,
+        SubparserNames.parameterization.value,
+        SubparserNames.genomecount.value,
+        SubparserNames.relative_performance.value,
+        SubparserNames.filter_performance.value,
+        SubparserNames.memory.value,
+        SubparserNames.readlength.value,
+        SubparserNames.threads.value,
+        SubparserNames.depth.value
+    ]
 
-    # if parameterization
-    parameterization_parser = subparsers.add_parser(SubparserNames.parameterization.value)
-    add_common_arguments(parameterization_parser)
-
-    # if genomecount
-    genomecount_parser = subparsers.add_parser(SubparserNames.genomecount.value)
-    add_common_arguments(genomecount_parser)
-
-    # if relative_performance
-    relative_performance_parser = subparsers.add_parser(SubparserNames.relative_performance.value)
-    add_common_arguments(relative_performance_parser)
-
-    # if filter_performance
-    filter_performance_parser = subparsers.add_parser(SubparserNames.filter_performance.value)
-    add_common_arguments(filter_performance_parser)
-
-    # if memory & time bench
-    memory_parser = subparsers.add_parser(SubparserNames.memory.value)
-    add_common_arguments(memory_parser)
-
-    # readlength test
-    readlength_parser = subparsers.add_parser(SubparserNames.readlength.value)
-    add_common_arguments(readlength_parser)
-
-    # threads test
-    threads_parser = subparsers.add_parser(SubparserNames.threads.value)
-    add_common_arguments(threads_parser)
-
-    # readlength test
-    depth_parser = subparsers.add_parser(SubparserNames.depth.value)
-    add_common_arguments(depth_parser)
+    for name in subparser_names:
+        subparser = subparsers.add_parser(name)
+        add_common_arguments(subparser)
 
     return parser.parse_args(argv)
 
+def run_benchmark(args, benchmark_class, message):
+    print(f"Performing {message} benchmarking...")
+    benchmark_instance = benchmark_class()
+    kwargs = {
+        "pos_genome_path": args.genome_dir,
+        "neg_genome_path": args.neg_genome_dir,
+        "config": args.config,
+        "result_csv": args.result_csv
+    }
+    benchmark_instance.run(**kwargs)
+
 
 def main():
-
-    def performance_testing_action():
-        print(f"Performing parameterization benchmarking...")
-        PerformanceBenchmark().run(pos_genome_path=args.genome_dir,
-                                    neg_genome_path=args.neg_genome_dir,
-                                    config=args.config,
-                                    result_csv=args.result_csv, 
-                                    variation_count=10)
-        
-    def parameterization_action():
-        print(f"Performing parameterization benchmarking...")
-        ParameterBenchmark().run(pos_genome_path=args.genome_dir,
-                                 neg_genome_path=args.neg_genome_dir,
-                                 config=args.config, 
-                                 result_csv=args.result_csv, 
-                                 read_count=1000)
-
-    def genomecount_action():
-        print(f"Performing genome count benchmarking...")
-        GenomeCountBenchmark().run(pos_genome_path=args.genome_dir,
-                                    neg_genome_path=None,
-                                    config=args.config,
-                                    result_csv=args.result_csv)
-
-    def readlength_action():
-        print(f"Performing read length benchmarking...")
-        ReadLengthBenchmark().run(pos_genome_path=args.genome_dir,
-                                  neg_genome_path=args.neg_genome_dir,
-                                  config=args.config,  
-                                  result_csv=args.result_csv,
-                                  variation_count = 2)
-
-    def threads_action():
-        print(f"Performing thread benchmarking...")
-        ThreadsBenchmarking().run(pos_genome_path=args.genome_dir,
-                                  neg_genome_path=args.neg_genome_dir,
-                                  config=args.config, 
-                                  result_csv=args.result_csv,
-                                  variation_count = 3, 
-                                  contamination_fraction = 0.5, 
-                                  read_count=100000)
-                                        
-    
-    def relative_performance_action():
-        print(f"Performing relative performance benchmarking...")
-        TaxonomicBenchmark().run(pos_genome_path=args.genome_dir,
-                                 neg_genome_path=args.neg_genome_dir,
-                                 config=args.config, 
-                                 result_csv=args.result_csv,
-                                 contamination_fraction = 0.5,
-                                 read_count=100)
-
-    def filter_performance_action():
-        print(f"Performing filter performance benchmarking...")
-        FilterBenchmark().run(pos_genome_path=args.genome_dir,
-                              neg_genome_path=args.neg_genome_dir,
-                              config=args.config,
-                              result_csv=args.result_csv,
-                              read_count=100)
-
-    def memory_action():
-        print(f"Performing filter memory & time benchmarking...")
-        MemoryBenchmark().run(
-            pos_genome_path=args.genome_dir, 
-            neg_genome_path=args.neg_genome_dir,
-            config=args.config,
-            result_csv=args.result_csv, 
-            contamination_fraction = 0.2,
-            variation_count = 10
-        )
-
-    def depth_action():
-        print(f"Performing tree depth benchmarking...")
-        TunableDepthBenchmark().run(pos_genome_path=args.genome_dir, 
-                                   neg_genome_path=args.neg_genome_dir, 
-                                   config=args.config, 
-                                   result_csv=args.result_csv, 
-                                   read_count=100000,
-                                   contamination_fraction=0.90
-        )
-
     # arguments
     args = parseArgs(sys.argv[1:])
 
-    # map subparsers to their corresponding functions and messages
-    actions = {
-        SubparserNames.parameterization.value: parameterization_action,
-        SubparserNames.genomecount.value: genomecount_action,
-        SubparserNames.relative_performance.value: relative_performance_action,
-        SubparserNames.performance_testing.value: performance_testing_action,
-        SubparserNames.filter_performance.value: filter_performance_action,
-        SubparserNames.memory.value: memory_action,
-        SubparserNames.readlength.value: readlength_action,
-        SubparserNames.threads.value: threads_action,
-        SubparserNames.depth.value: depth_action
+    benchmarks = {
+        SubparserNames.parameterization.value: (ParameterBenchmark, "parameterization"),
+        SubparserNames.genomecount.value: (GenomeCountBenchmark, "genome count"),
+        SubparserNames.relative_performance.value: (TaxonomicBenchmark, "relative performance"),
+        SubparserNames.performance_testing.value: (PerformanceBenchmark, "performance testing"),
+        SubparserNames.filter_performance.value: (FilterBenchmark, "filter performance"),
+        SubparserNames.memory.value: (MemoryBenchmark, "filter memory & time"),
+        SubparserNames.readlength.value: (ReadLengthBenchmark, "read length"),
+        SubparserNames.threads.value: (ThreadsBenchmarking, "thread"),
+        SubparserNames.depth.value: (TunableDepthBenchmark, "tree depth")
     }
 
-    # run benchmark type specified
-    action = actions.get(args.sub_parser)
-    if action:
-        action()
+    benchmark_class, message = benchmarks.get(args.sub_parser, (None, None))
+    if benchmark_class:
+        run_benchmark(args, benchmark_class, message)
     else:
         print(__doc__)
+
 
 if __name__ == '__main__':
     main()
