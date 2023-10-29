@@ -1,51 +1,7 @@
 """
 Benchmarking module for PhageFilter.
 
-Examples:
-* performance benchmarking (when optimizing performance..)
-```
-python3 benchmarking/bench.py performance_testing -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_performance_benchmarking.csv
-```
-
-* running genome count benchmarking
-```
-python3 benchmarking/bench.py genomecount -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_genomes.csv
-```
-
-* perform threading tests
-```
-python3 benchmarking/bench.py threads -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_threading.csv
-```
-
-* read length benchmarking
-```
-python3 benchmarking/bench.py readlength -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_readlength.csv
-```
-
-* running parameterization benchmarking
-```
-python3 benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_parameterization.csv
-```
-
-* classification benchmarking
-```
-python3 benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_relative_performance.csv
-```
-
-* filter performance benchmarking
-```
-python3 benchmarking/bench.py filter_performance -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_filter_performance.csv
-```
-
-* filter memory benchmarking
-```
-python3 benchmarking/bench.py memory -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_filter_memory.csv
-```
-
-* depth testing
-```
-python3 benchmarking/bench.py depth -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_depth.csv
-```
+Use `python3 benchmarking/bench.py -h` for options. Further info and *examples* for each benchmark can be accessed using `python3 benchmarking/bench.py <benchmark_name> -h`.
 """
 # standard libraries
 from enum import Enum
@@ -78,26 +34,28 @@ def add_common_arguments(subparser):
     subparser.add_argument("-r", "--result_csv", type=Path, help="Path to the result CSV (output)", required=True)
 
 def parseArgs(argv=None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    # Main parser description
+    parser = argparse.ArgumentParser(description="Benchmarking module for PhageFilter. For detailed installation and dependency information, refer to the project documentation or README.")
+
     subparsers = parser.add_subparsers(help='Choose type of benchmarking', dest='sub_parser')
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", "--verbose", action="store_true")
 
-    # List of all subparser names
-    subparser_names = [
-        SubparserNames.performance_testing.value,
-        SubparserNames.parameterization.value,
-        SubparserNames.genomecount.value,
-        SubparserNames.relative_performance.value,
-        SubparserNames.filter_performance.value,
-        SubparserNames.memory.value,
-        SubparserNames.readlength.value,
-        SubparserNames.threads.value,
-        SubparserNames.depth.value
-    ]
+    # Example commands for each subparser
+    examples = {
+        SubparserNames.performance_testing.value: "python3 benchmarking/bench.py performance_testing -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_performance_benchmarking.csv",
+        SubparserNames.genomecount.value: "python3 benchmarking/bench.py genomecount -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_genomes.csv",
+        SubparserNames.threads.value: "python3 benchmarking/bench.py threads -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_threading.csv",
+        SubparserNames.readlength.value: "python3 benchmarking/bench.py readlength -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_readlength.csv",
+        SubparserNames.parameterization.value: "python3 benchmarking/bench.py parameterization -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_parameterization.csv",
+        SubparserNames.relative_performance.value: "python3 benchmarking/bench.py relative_performance -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_relative_performance.csv",
+        SubparserNames.filter_performance.value: "python3 benchmarking/bench.py filter_performance -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_filter_performance.csv",
+        SubparserNames.memory.value: "python3 benchmarking/bench.py memory -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_filter_memory.csv",
+        SubparserNames.depth.value: "python3 benchmarking/bench.py depth -g examples/genomes/viral_genome_dir/ -n examples/genomes/bacteria_genome_dir/ -c benchmarking/config.yaml -r res_depth.csv"
+    }
 
-    for name in subparser_names:
-        subparser = subparsers.add_parser(name)
+    for name in SubparserNames:
+        subparser = subparsers.add_parser(name.value, description=f"Example command:\n{examples[name.value]}")
         add_common_arguments(subparser)
 
     return parser.parse_args(argv)
