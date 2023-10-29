@@ -15,7 +15,7 @@ import os
 
 class FastViromeExplorer(ToolOp):
 
-    def __init__(self, tool_path, list_file_path, kmer_size: int = 31):
+    def __init__(self, tool_path, list_file_path, kmer_size: int = 31, threads=1):
         """_summary_
 
         Args:
@@ -27,6 +27,7 @@ class FastViromeExplorer(ToolOp):
         self.tool_path = tool_path
         self.list_file_path = list_file_path
         self.db_path = None
+        self.threads = threads # not used for this tool.
 
     def parse_output(self, output_path: Path, genomes_path: Path) -> Dict[str, int]:
         """_summary_
