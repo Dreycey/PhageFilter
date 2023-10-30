@@ -4,6 +4,7 @@ PhageFilter:
   filter_thresh: 0.3
   cache_size: 10 # Size of the LRU cache. (how many BFs in memory at once.) [default: 10]
   block_size_reads: 100 # Size of the read blocks (how many reads in mem at a time) [default: 100]
+  false_positive_rate: 0.00001 # Bloom filter false positive rate [default: 0.00001]
   threads: 1
 Kraken2:
   database_name: "/datadrive/krakenDB/"

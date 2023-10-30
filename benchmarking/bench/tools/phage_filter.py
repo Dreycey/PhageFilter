@@ -13,14 +13,8 @@ from collections import Counter
 
 class PhageFilter(ToolOp):
 
-    def __init__(self, kmer_size: int, filter_thresh: float, database_name, cache_size=10, block_size_reads=100, threads=1, largest_genome=500000):
-        """_summary_
-
-        Args:
-            kmer_size (int): _description_
-            filter_thresh (float): _description_
-            threads (int, optional): _description_. Defaults to 4.
-        """
+    def __init__(self, kmer_size: int, filter_thresh: float, database_name, cache_size=10, 
+                 block_size_reads=100, false_positive_rate=0.00001, threads=1, largest_genome=500000):
         self.k = kmer_size
         self.theta = filter_thresh
         self.threads = threads
@@ -28,22 +22,20 @@ class PhageFilter(ToolOp):
         self.largest_genome = largest_genome
         self.cache_size = cache_size
         self.block_size_reads = block_size_reads
+        self.false_positive_rate = false_positive_rate
+        
+        # names used by the phagefilter output
+        self.filtering_output = "POS_FILTERING.fa"
+        self.classification_output = "CLASSIFICATION.csv"
 
-    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.005) -> Dict[str, int]:
-        """_summary_
+    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0) -> Dict[str, int]:
+        """
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.
-
-        Args:
-            output_path (Path): Path where the output of PhageFilter
-                                will be stored.
-
-        Returns:
-            Dict[str, int]: A map from NCBI ID to read count
         """
         if filter_reads:
             read_counter = Counter()
-            with open(output_path + "/POS_FILTERING.fa", "r") as opened_file:
+            with open(output_path + f"/{self.filtering_output}", "r") as opened_file:
                 line = opened_file.readline()
                 while line:
                     if line[0] == ">":
@@ -53,7 +45,7 @@ class PhageFilter(ToolOp):
             return read_counter
         else:
             name2counts = {}
-            with open(output_path + "/CLASSIFICATION.csv") as out_file:
+            with open(output_path + f"/{self.classification_output}") as out_file:
                 line = out_file.readline()
                 count = 0
                 while line:
@@ -61,14 +53,14 @@ class PhageFilter(ToolOp):
                     name2counts[name] = int(count)
                     line = out_file.readline()
 
-            # filter based on read count threshold
-            total_reads_classified = sum(name2counts.values())
-            name2counts = {
-                k: v for k, v in name2counts.items() if v > cuttoff*total_reads_classified}
+            # filter based on max reads for a genome
+            total_reads_classified = max(name2counts.values())
+            name2counts = {k: v for k, v in name2counts.items() 
+                           if v > cuttoff*total_reads_classified}
 
             return name2counts
 
-    def build(self, db_path: Path, genomes_path: Path, fpr=0.00001) -> List[List[str]]:
+    def build(self, db_path: Path, genomes_path: Path) -> List[List[str]]:
         """_summary_
         Build the tools database.
 
@@ -84,7 +76,7 @@ class PhageFilter(ToolOp):
         build_cmd += ["--db-path", f"{db_path}"]
         build_cmd += ["--kmer-size", f"{self.k}"]
         build_cmd += ["--cache-size", f"{self.cache_size}"]
-        build_cmd += ["--false-pos-rate", f"{fpr}"]
+        build_cmd += ["--false-pos-rate", f"{self.false_positive_rate}"]
         build_cmd += ["--largest-genome", f"{self.largest_genome}"]
         build_cmd += ["--threads", f"{self.threads}"]
         self.db_path = db_path
