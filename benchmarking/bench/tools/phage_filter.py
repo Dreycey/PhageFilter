@@ -13,7 +13,7 @@ from collections import Counter
 
 class PhageFilter(ToolOp):
 
-    def __init__(self, kmer_size: int, filter_thresh: float, database_name, cache_size, threads=1, largest_genome=500000):
+    def __init__(self, kmer_size: int, filter_thresh: float, database_name, cache_size=10, block_size_reads=100, threads=1, largest_genome=500000):
         """_summary_
 
         Args:
@@ -27,6 +27,7 @@ class PhageFilter(ToolOp):
         self.db_path = database_name
         self.largest_genome = largest_genome
         self.cache_size = cache_size
+        self.block_size_reads = block_size_reads
 
     def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0.005) -> Dict[str, int]:
         """_summary_
@@ -90,7 +91,7 @@ class PhageFilter(ToolOp):
 
         return [build_cmd]
 
-    def run(self, fasta_file: Path, output_path: Path, cache_size=1, filter_reads=False, depth=None):
+    def run(self, fasta_file: Path, output_path: Path, cache_size=None, filter_reads=False, depth=None):
         """_summary_
         run tool, based on input arguments, it outputs a CMD-line array.
 
@@ -103,13 +104,15 @@ class PhageFilter(ToolOp):
         """
         if not self.db_path:
             print("Must first build (PhageFilter)")
-            exit()
+            exit()            
+        if not cache_size:
+            cache_size = self.cache_size
         run_cmd = ["./target/release/phage_filter", "query"]
         run_cmd += ["--reads", f"{fasta_file}"]
         run_cmd += ["--db-path", f"{self.db_path}"]
         run_cmd += ["--filter-threshold", f"{self.theta}"]
         run_cmd += ["--cache-size", f"{cache_size}"]
-        run_cmd += ["--block-size-reads", f"{1000}"]
+        run_cmd += ["--block-size-reads", f"{self.block_size_reads}"]
         run_cmd += ["--out", f"{output_path}"]
         run_cmd += ["--threads", f"{self.threads}"]
         if depth != None:
