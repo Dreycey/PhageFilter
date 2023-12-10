@@ -28,7 +28,7 @@ class PhageFilter(ToolOp):
         self.filtering_output = "POS_FILTERING.fa"
         self.classification_output = "CLASSIFICATION.csv"
 
-    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cuttoff=0) -> Dict[str, int]:
+    def parse_output(self, output_path: Path, genomes_path: Path = None, filter_reads=False, cutoff=0) -> Dict[str, int]:
         """
         parses an output file/directory (depends on tool)
         returns a dictionary of the output of PhageFilter.
@@ -56,7 +56,7 @@ class PhageFilter(ToolOp):
             # filter based on max reads for a genome
             total_reads_classified = max(name2counts.values())
             name2counts = {k: v for k, v in name2counts.items() 
-                           if v > cuttoff*total_reads_classified}
+                           if v > cutoff*total_reads_classified}
 
             return name2counts
 

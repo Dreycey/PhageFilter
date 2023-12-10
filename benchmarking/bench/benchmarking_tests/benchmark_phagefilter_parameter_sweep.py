@@ -86,7 +86,7 @@ class ParameterBenchmark(BenchmarkStrategy):
 
                                         for theta in self.theta_range:
                                             tool.theta = theta
-                                            for cuttoff in self.cuttoff_range:
+                                            for cutoff in self.cuttoff_range:
                                                 # run phagefilter
                                                 output_file = f"phagefilter_{sim_reads_name}_{genome_size}_{kmer_size}_{theta}_{error_rate}"
                                                 pf_run_cmd = tool.run(combined_test_path, output_file, filter_reads=True)
@@ -94,7 +94,7 @@ class ParameterBenchmark(BenchmarkStrategy):
 
                                                 # classification performance
                                                 truth_map = utils.get_true_maps(pos_reads_path)
-                                                result_map = tool.parse_output(output_file, cuttoff=cuttoff)
+                                                result_map = tool.parse_output(output_file, cutoff=cutoff)
                                                 classification_recall, classification_precision = utils.get_classification_metrics(true_map=truth_map, out_map=result_map)
                                                 read_count_error = utils.get_readcount_metrics(true_map=truth_map, out_map=result_map)
                                                 
@@ -107,6 +107,7 @@ class ParameterBenchmark(BenchmarkStrategy):
                                                     "replicate": replicate,
                                                     "kmer size": kmer_size,
                                                     "theta": theta,
+                                                    "cutoff percentage": cutoff,
                                                     "genome size": genome_size,
                                                     "error rate": error_rate,
                                                     "number of genomes": genome_count,
