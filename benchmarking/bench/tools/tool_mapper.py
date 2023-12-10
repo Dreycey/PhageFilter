@@ -58,16 +58,23 @@ class ToolName(Enum):
     @staticmethod
     def build_dbs(tools: Dict[str, ToolOp], configuration, genome_directory: Path) -> Dict[str, BenchmarkResult]:
         """Given a map from name to each tool wrapper, create a db."""
-        # build DBs
         toolname2buildresult = {}
         for toolname, tool in tools.items():
             print(f"Building DB for {toolname}...")
             tool_DB = configuration[toolname].get("database_name", None)
+            
+            # delete DB if exists
             if os.path.exists(tool_DB):
                 if os.path.isfile(tool_DB):
                     os.remove(tool_DB)
                 else:
                     shutil.rmtree(tool_DB) # delete DB if exists
+            try:
+                assert(os.path.exists(tool_DB) == False)
+            except AssertionError:
+                raise ValueError(f"Database {tool_DB} was not deleted successfully.")
+            
+            # create new DB
             tool_build_cmd = tool.build(tool_DB, genome_directory)
             toolname2buildresult[toolname]: BenchmarkResult = utils.run_command(tool_build_cmd)
             
