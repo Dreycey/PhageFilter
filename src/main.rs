@@ -128,7 +128,7 @@ fn main() {
         } => {
             // initial message to show used parameters.
             log::info!(
-                "\n Build input-  \n\tdb:{:?} \n\tthreads:{} \n\tkmersize:{} \n",
+                "\n Build input-  \n\tdb path:{:?} \n\tthreads:{} \n\tkmersize:{} \n",
                 db_path,
                 threads,
                 kmer_size
@@ -157,6 +157,7 @@ fn main() {
                 *false_pos_rate,
                 *largest_genome,
             );
+
             while !genome_block.is_empty() {
                 for genome in genome_block {
                     bloom_tree.insert(&genome);
@@ -168,6 +169,7 @@ fn main() {
             bloom_tree.save(db_path);
             print!("Finished. \n");
         }
+
         Commands::Add {
             genomes,
             db_path,
@@ -213,6 +215,7 @@ fn main() {
             bloom_tree.save(db_path);
             print!("Finished. \n");
         }
+
         Commands::Query {
             reads,
             out,
@@ -249,7 +252,10 @@ fn main() {
 
             // parse reads
             println!("Querying reads...");
-            println!("Filtering settings: positive={}; negative={}", pos_filter, neg_filter);
+            println!(
+                "Filtering settings: positive={}; negative={}",
+                pos_filter, neg_filter
+            );
             let filtering_option = *pos_filter || *neg_filter;
 
             // changing search depth (i.e. prunes the tree to a search depth)
@@ -258,7 +264,7 @@ fn main() {
                     println!("If using a search depth, use a filtering flag (--pos-filter or --neg-filter, or both!)");
                 }
                 println!("Search depth settings: {:?}", search_depth.unwrap());
-                bloom_tree.prune_tree(search_depth.unwrap());  
+                bloom_tree.prune_tree(search_depth.unwrap());
             }
 
             // create a read buffer
@@ -318,13 +324,12 @@ fn main() {
                     });
                 }
 
-                // empty result map
+                // empty result map 
                 result_map.empty_read_map();
 
                 // get next read block
                 read_block = readqueue.next_block();
             }
-
 
             // open output file to write to
             let mut out_file = File::create(out.join("CLASSIFICATION.csv")).unwrap();
@@ -334,7 +339,7 @@ fn main() {
             println!("Finished.");
         }
     }
-}
+}  
 
 fn create_and_overwrite_directory(dir_path: &PathBuf) -> io::Result<()> {
     // Check if the directory exists

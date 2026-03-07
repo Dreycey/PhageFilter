@@ -9,17 +9,19 @@ use crate::bloom_filter::hasher::HashSeed;
 /// ```rust
 /// let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
 /// ```
-use crate::bloom_filter::{BloomFilter, create_bloom_filter, DistanceChecker, ASMS};
-use crate::cache::{BFLruCache, BloomFilterCache};
-use crate::file_parser;
+use crate::bloom_filter::{create_bloom_filter, BloomFilter, DistanceChecker, ASMS};
 use crate::Arc;
-use std::sync::RwLock;
+use crate::{
+    cache::{BFLruCache, BloomFilterCache},
+    file_parser,
+};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
 const TREE_FILENAME: &'static str = "tree.bin";
 
@@ -242,17 +244,17 @@ impl BloomTree<HashSeed, HashSeed> {
 
         return new_internal_node;
     }
-    
-    fn node_distance(&self, node_a: &BloomNode, node_b: &BloomNode) -> usize {
-            // get BF for node a
-            let b4_node_a = self.get_bf(node_a);
-            let bf_node_a = b4_node_a.read().unwrap();
-    
-            // get BF for node b
-            let b4_node_b = self.get_bf(node_b);
-            let bf_node_b = b4_node_b.read().unwrap();
 
-            return bf_node_a.distance(&bf_node_b);
+    fn node_distance(&self, node_a: &BloomNode, node_b: &BloomNode) -> usize {
+        // get BF for node a
+        let b4_node_a = self.get_bf(node_a);
+        let bf_node_a = b4_node_a.read().unwrap();
+
+        // get BF for node b
+        let b4_node_b = self.get_bf(node_b);
+        let bf_node_b = b4_node_b.read().unwrap();
+
+        return bf_node_a.distance(&bf_node_b);
     }
 
     fn node_union(&self, node2modify: &BloomNode, node2add: &BloomNode) {
@@ -269,7 +271,9 @@ impl BloomTree<HashSeed, HashSeed> {
     }
 
     fn get_bf(&self, bloom_node: &BloomNode) -> Arc<RwLock<BloomFilter>> {
-        self.bf_cache.get_filter(&bloom_node.bloom_filter_path).expect("BF was not found!")
+        self.bf_cache
+            .get_filter(&bloom_node.bloom_filter_path)
+            .expect("BF was not found!")
     }
 
     fn make_bloom_node(&self, nodeid: String) -> Box<BloomNode> {
@@ -294,11 +298,13 @@ impl BloomTree<HashSeed, HashSeed> {
         Box::new(bloomnode)
     }
 
-
     /// - if the directory does not exist.
     pub fn prune_tree(&mut self, search_depth: usize) {
         // print where the tree is being saved.
-        log::info!(" (bloom tree; prune_tree()) pruning tree to depth of: {}", search_depth);
+        log::info!(
+            " (bloom tree; prune_tree()) pruning tree to depth of: {}",
+            search_depth
+        );
         // set up queue
         let mut queue: Vec<(&mut Box<BloomNode>, usize)> = vec![];
         let root = self.root.as_mut().unwrap();
