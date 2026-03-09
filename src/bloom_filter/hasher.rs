@@ -1,4 +1,4 @@
-use rand;
+use rand::Rng;
 use rustc_hash::FxHasher;
 use serde::{Deserialize, Serialize};
 use std::hash::{BuildHasher, Hasher};
@@ -23,7 +23,7 @@ impl BuildHasher for HashSeed {
 impl HashSeed {
     pub fn new() -> Self {
         HashSeed {
-            seed: rand::random(),
+            seed: rand::thread_rng().gen(),
         }
     }
 }
