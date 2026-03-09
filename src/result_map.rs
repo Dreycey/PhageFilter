@@ -20,7 +20,7 @@ impl ResultMap {
     pub fn add_read_map(&mut self, read_id: String, genome_id: String) {
         //println!("adding read {} and genome {}", read_id, genome_id);
 
-        if let Some(mut genome_set) = self.read_map.get_mut(&read_id) {
+        if let Some(genome_set) = self.read_map.get_mut(&read_id) {
             genome_set.insert(genome_id);
         } else {
             let mut new_genome_set = HashSet::new();
@@ -50,5 +50,83 @@ impl ResultMap {
 
     pub fn empty_read_map(&mut self) {
         self.read_map.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_creates_empty_map() {
+        let rm = ResultMap::new();
+        assert!(!rm.read_mapped(&"any".to_string()));
+    }
+
+    #[test]
+    fn test_add_read_map_single_insert() {
+        let mut rm = ResultMap::new();
+        rm.add_read_map("read1".to_string(), "genomeA".to_string());
+        assert!(rm.read_mapped(&"read1".to_string()));
+        assert_eq!(rm.read_map.get("read1").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_add_read_map_duplicate_read_different_genome() {
+        let mut rm = ResultMap::new();
+        rm.add_read_map("read1".to_string(), "genomeA".to_string());
+        rm.add_read_map("read1".to_string(), "genomeB".to_string());
+        let genomes = rm.read_map.get("read1").unwrap();
+        assert_eq!(genomes.len(), 2);
+        assert!(genomes.contains("genomeA"));
+        assert!(genomes.contains("genomeB"));
+    }
+
+    #[test]
+    fn test_get_ext_id_unmapped_read() {
+        let rm = ResultMap::new();
+        let ext = rm.get_ext_id(&"unknown".to_string());
+        assert_eq!(ext, "unknown |");
+    }
+
+    #[test]
+    fn test_get_ext_id_single_genome() {
+        let mut rm = ResultMap::new();
+        rm.add_read_map("read1".to_string(), "genomeA".to_string());
+        let ext = rm.get_ext_id(&"read1".to_string());
+        assert_eq!(ext, "read1 |genomeA");
+    }
+
+    #[test]
+    fn test_get_ext_id_multiple_genomes() {
+        let mut rm = ResultMap::new();
+        rm.add_read_map("read1".to_string(), "genomeA".to_string());
+        rm.add_read_map("read1".to_string(), "genomeB".to_string());
+        let ext = rm.get_ext_id(&"read1".to_string());
+        assert!(ext.starts_with("read1 |"));
+        let suffix = &ext["read1 |".len()..];
+        let mut parts: Vec<&str> = suffix.split(',').collect();
+        parts.sort();
+        assert_eq!(parts, vec!["genomeA", "genomeB"]);
+    }
+
+    #[test]
+    fn test_read_mapped_true_and_false() {
+        let mut rm = ResultMap::new();
+        assert!(!rm.read_mapped(&"read1".to_string()));
+        rm.add_read_map("read1".to_string(), "genomeA".to_string());
+        assert!(rm.read_mapped(&"read1".to_string()));
+        assert!(!rm.read_mapped(&"read2".to_string()));
+    }
+
+    #[test]
+    fn test_empty_read_map_clears_all() {
+        let mut rm = ResultMap::new();
+        rm.add_read_map("read1".to_string(), "genomeA".to_string());
+        rm.add_read_map("read2".to_string(), "genomeB".to_string());
+        assert!(rm.read_mapped(&"read1".to_string()));
+        rm.empty_read_map();
+        assert!(!rm.read_mapped(&"read1".to_string()));
+        assert!(!rm.read_mapped(&"read2".to_string()));
     }
 }

@@ -5,6 +5,7 @@ small_genome_dir/
 .pytest_cache
 __pycache__
 tmp_output/
+tmp_testing_query/
 *.ipynb_checkpoints*
 # mac specific files
 .DS_Store

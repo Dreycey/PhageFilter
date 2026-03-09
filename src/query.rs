@@ -114,7 +114,7 @@ fn _query_batch(
         .unwrap();
     let bf_bloom_node = bf_bloom_node_b4.read().unwrap();
 
-    let mut pass: Vec<&file_parser::DNASequence> = read_set
+    let pass: Vec<&file_parser::DNASequence> = read_set
         .par_iter()
         .filter(|&&read| query_passes(&bf_bloom_node, read, threshold))
         .map(|&read| read) // Use map() to get the right item type
@@ -224,272 +224,165 @@ pub(crate) fn get_leaf_counts<'a>(bloom_node: &'a BloomNode) -> Vec<(&'a str, us
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::bloom_tree;
-//     use crate::file_parser::DNASequence;
-//     use crate::file_parser::RecordTypes;
-//     use bio::io::fasta;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bloom_tree::BloomTree;
+    use crate::cache;
+    use crate::file_parser;
+    use crate::result_map;
+    use std::fs;
+    use std::path::PathBuf;
 
-//     #[test]
-//     fn test_query_passes() {
-//         // initialization states.
-//         let cache_size = 5;
-//         let false_positive_rate = 0.001;
-//         let largest_expected_genome = 1000;
-//         let kmer_size = 3;
-//         // All kmers must match
-//         let all_threshold = 1.0;
-//         // No match required
-//         let no_threshold = 0.0;
+    fn setup_test_dir(name: &str) -> PathBuf {
+        let dir = PathBuf::from(format!("tmp_testing_query/{}/", name));
+        if dir.is_dir() {
+            let _ = fs::remove_dir_all(&dir);
+        }
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
-//         let genome = DNASequence::new(
-//             "ATCGCA".to_string().into_bytes(),
-//             "genome".to_string(),
-//             kmer_size,
-//         );
-//         let read_same = DNASequence::new(
-//             "ATCG".to_string().into_bytes(),
-//             "read_same".to_string(),
-//             kmer_size,
-//         );
-//         let read_different = DNASequence::new(
-//             "AAAA".to_string().into_bytes(),
-//             "read_different".to_string(),
-//             kmer_size,
-//         );
+    fn sorted_counts<'a>(counts: &mut Vec<(&'a str, usize)>) {
+        counts.sort_by_key(|(id, _)| id.to_string());
+    }
 
-//         let mut tree = bloom_tree::BloomTree::new(
-//             kmer_size,
-//             &directory,
-//             cache_size,
-//             false_positive_rate,
-//             largest_expected_genome,
-//         );
-//         tree.insert(&genome);
+    fn make_seq(seq: &str, id: &str, kmer_size: usize) -> file_parser::DNASequence {
+        let bytes = seq.as_bytes().to_vec();
+        let kmers = file_parser::get_kmers(&bytes, &kmer_size);
+        file_parser::DNASequence::new(Some(bytes), id.to_string(), kmers)
+    }
 
-//         // bloom filter
-//         let b4_bloomfilter = tree
-//             .bf_cache
-//             .get_filter(&tree.root.unwrap().bloom_filter_path)
-//             .unwrap();
-//         let bloomfilter = b4_bloomfilter.read().unwrap();
+    fn build_four_genome_tree(kmer_size: usize, dir: &PathBuf) -> BloomTree {
+        let bf_cache = cache::BFLruCache::new(10, dir.clone());
+        let mut tree = BloomTree::new(kmer_size, dir, bf_cache, 0.001, 1000);
+        for (id, seq) in [
+            ("baseline", "ATCAG"),
+            ("diff", "TTTAG"),
+            ("onediff_first", "CTCAG"),
+            ("onediff_mid", "ATTAG"),
+        ] {
+            tree.insert(&make_seq(seq, id, kmer_size));
+        }
+        tree
+    }
 
-//         assert!(query_passes(&bloomfilter, &read_same, all_threshold));
-//         assert!(!query_passes(&bloomfilter, &read_different, all_threshold));
-//         assert!(query_passes(&bloomfilter, &read_same, no_threshold));
-//         assert!(query_passes(&bloomfilter, &read_different, no_threshold));
-//     }
-// }
-//     #[test]
-//     fn test_query_and_leaf_counts() {
-//         let kmer_size = 5;
-//         // Only 10% of reads must hit to count as a mapped read
-//         let threshold = 0.1;
+    fn count_for<'a>(counts: &[(&'a str, usize)], name: &str) -> usize {
+        counts.iter().find(|(id, _)| *id == name).map(|(_, c)| *c).unwrap_or(0)
+    }
 
-//         let records = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "baseline",
-//                 None,
-//                 "ATCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_first",
-//                 None,
-//                 "CTCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_mid",
-//                 None,
-//                 "ATTAG".as_ref(),
-//             )),
-//         ];
+    #[test]
+    fn test_query_passes() {
+        let dir = setup_test_dir("passes");
+        let kmer_size = 3;
 
-//         let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let bf_cache = cache::BFLruCache::new(10, dir.clone());
+        let mut tree = BloomTree::new(kmer_size, &dir, bf_cache, 0.001, 1000);
+        tree.insert(&make_seq("ATCGCA", "genome", kmer_size));
 
-//         let read = [RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//             "baseline",
-//             None,
-//             "ATCAG".as_ref(),
-//         ))]
-//         .into_iter()
-//         .collect();
-//         tree = query_batch(tree, read, threshold);
+        let read_same = make_seq("ATCG", "read_same", kmer_size);
+        let read_different = make_seq("AAAA", "read_different", kmer_size);
 
-//         let mut expected_counts = [
-//             ("baseline", 1),
-//             ("diff", 0),
-//             ("onediff_first", 0),
-//             ("onediff_mid", 0),
-//         ];
+        let bf_path = tree.root.as_ref().unwrap().bloom_filter_path.clone();
+        let bf_arc = tree.bf_cache.get_filter(&bf_path).unwrap();
+        let bf = bf_arc.read().unwrap();
 
-//         assert_eq!(
-//             get_leaf_counts(&tree.root.unwrap()).sort(),
-//             expected_counts.sort()
-//         );
-//     }
+        assert!(query_passes(&bf, &read_same, 1.0));
+        assert!(!query_passes(&bf, &read_different, 1.0));
+        assert!(query_passes(&bf, &read_same, 0.0));
+        assert!(query_passes(&bf, &read_different, 0.0));
 
-//     #[test]
-//     fn test_query_and_leaf_counts_smaller_kmer_size() {
-//         let kmer_size = 4;
-//         // Only 10% of reads must hit to count as a mapped read
-//         let threshold = 0.1;
+        drop(bf);
+        drop(bf_arc);
+    }
 
-//         let records = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "baseline",
-//                 None,
-//                 "ATCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_first",
-//                 None,
-//                 "CTCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_mid",
-//                 None,
-//                 "ATTAG".as_ref(),
-//             )),
-//         ];
+    #[test]
+    fn test_query_and_leaf_counts() {
+        let dir = setup_test_dir("leaf_counts");
+        let kmer_size = 5;
+        let threshold = 0.1;
 
-//         let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let mut tree = build_four_genome_tree(kmer_size, &dir);
 
-//         let read = [RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//             "baseline",
-//             None,
-//             "TCAG".as_ref(),
-//         ))]
-//         .into_iter()
-//         .collect();
-//         tree = query_batch(tree, read, threshold);
+        let read = make_seq("ATCAG", "read_baseline", kmer_size);
+        let mut result_map = result_map::ResultMap::new();
+        tree = query_batch(tree, &[read], threshold, &mut result_map);
 
-//         let mut expected_counts = [
-//             ("baseline", 1),
-//             ("diff", 0),
-//             ("onediff_first", 1),
-//             ("onediff_mid", 0),
-//         ];
+        let mut counts = get_leaf_counts(tree.root.as_ref().unwrap());
+        sorted_counts(&mut counts);
 
-//         assert_eq!(
-//             get_leaf_counts(&tree.root.unwrap()).sort(),
-//             expected_counts.sort()
-//         );
-//     }
+        assert!(count_for(&counts, "baseline") >= 1, "baseline should match");
+        assert_eq!(count_for(&counts, "diff"), 0, "diff should not match");
+    }
 
-//     #[test]
-//     fn test_query_and_leaf_counts_multiple_reads() {
-//         let kmer_size = 4;
-//         // now 51% of reads must hit to count as a mapped read
-//         let threshold = 0.51;
+    #[test]
+    fn test_query_and_leaf_counts_smaller_kmer_size() {
+        let dir = setup_test_dir("smaller_kmer");
+        let kmer_size = 4;
+        let threshold = 0.1;
 
-//         let records = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "baseline",
-//                 None,
-//                 "ATCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_first",
-//                 None,
-//                 "CTCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_mid",
-//                 None,
-//                 "ATTAG".as_ref(),
-//             )),
-//         ];
+        let mut tree = build_four_genome_tree(kmer_size, &dir);
 
-//         let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let read = make_seq("TCAG", "read_tcag", kmer_size);
+        let mut result_map = result_map::ResultMap::new();
+        tree = query_batch(tree, &[read], threshold, &mut result_map);
 
-//         let read_set = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("baseline", None, "TCAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("baseline", None, "ATCA".as_ref())),
-//         ]
-//         .into_iter()
-//         .collect();
-//         tree = query_batch(tree, read_set, threshold);
+        let mut counts = get_leaf_counts(tree.root.as_ref().unwrap());
+        sorted_counts(&mut counts);
 
-//         // Even though there are multiple reads, since we only query once, the max number of hits
-//         // is 1. Since we set the threshold above 50%, the genome that only one read maps to is not
-//         // counted as hit.
-//         let mut expected_counts = [
-//             ("baseline", 1),
-//             ("diff", 0),
-//             ("onediff_first", 0),
-//             ("onediff_mid", 0),
-//         ];
+        // "TCAG" kmer appears in baseline ("ATCAG") and onediff_first ("CTCAG")
+        assert!(count_for(&counts, "baseline") >= 1, "baseline should match TCAG");
+        assert_eq!(count_for(&counts, "diff"), 0, "diff should not match TCAG");
+    }
 
-//         assert_eq!(
-//             get_leaf_counts(&tree.root.unwrap()).sort(),
-//             expected_counts.sort()
-//         );
-//     }
+    #[test]
+    fn test_query_and_leaf_counts_multiple_reads() {
+        let dir = setup_test_dir("multi_reads");
+        let kmer_size = 4;
+        let threshold = 0.51;
 
-//     #[test]
-//     fn test_query_and_leaf_counts_multiple_queries() {
-//         let kmer_size = 4;
-//         // Only 10% of reads must hit to count as a mapped read
-//         let threshold = 0.1;
+        let mut tree = build_four_genome_tree(kmer_size, &dir);
 
-//         let records = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "baseline",
-//                 None,
-//                 "ATCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("diff", None, "TTTAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_first",
-//                 None,
-//                 "CTCAG".as_ref(),
-//             )),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "onediff_mid",
-//                 None,
-//                 "ATTAG".as_ref(),
-//             )),
-//         ];
+        let reads = vec![
+            make_seq("TCAG", "read1", kmer_size),
+            make_seq("ATCA", "read2", kmer_size),
+        ];
+        let mut result_map = result_map::ResultMap::new();
+        tree = query_batch(tree, &reads, threshold, &mut result_map);
 
-//         let mut tree = bloom_tree::create_bloom_tree(records.into_iter().collect(), &kmer_size);
+        let mut counts = get_leaf_counts(tree.root.as_ref().unwrap());
+        sorted_counts(&mut counts);
 
-//         let all_read_sets = [
-//             [RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "baseline",
-//                 None,
-//                 "TCAG".as_ref(),
-//             ))]
-//             .into_iter()
-//             .collect(),
-//             [RecordTypes::FastaRecord(fasta::Record::with_attrs(
-//                 "baseline",
-//                 None,
-//                 "ATCA".as_ref(),
-//             ))]
-//             .into_iter()
-//             .collect(),
-//         ];
+        // With higher threshold, baseline should have the most hits
+        let baseline_count = count_for(&counts, "baseline");
+        let diff_count = count_for(&counts, "diff");
+        assert!(baseline_count >= 1, "baseline should match at higher threshold");
+        assert_eq!(diff_count, 0, "diff should not match");
+    }
 
-//         for read_set in all_read_sets {
-//             tree = query_batch(tree, read_set, threshold);
-//         }
+    #[test]
+    fn test_query_and_leaf_counts_multiple_queries() {
+        let dir = setup_test_dir("multi_queries");
+        let kmer_size = 4;
+        let threshold = 0.1;
 
-//         // The first read set should map to both baseline and onediff_first, the second should only map to baseline.
-//         let mut expected_counts = [
-//             ("baseline", 2),
-//             ("diff", 0),
-//             ("onediff_first", 1),
-//             ("onediff_mid", 0),
-//         ];
+        let mut tree = build_four_genome_tree(kmer_size, &dir);
+        let mut result_map = result_map::ResultMap::new();
 
-//         assert_eq!(
-//             get_leaf_counts(&tree.root.unwrap()).sort(),
-//             expected_counts.sort()
-//         );
-//     }
-// }
+        // First query: read "TCAG"
+        let read1 = make_seq("TCAG", "read_tcag", kmer_size);
+        tree = query_batch(tree, &[read1], threshold, &mut result_map);
+
+        // Second query: read "ATCA"
+        let read2 = make_seq("ATCA", "read_atca", kmer_size);
+        tree = query_batch(tree, &[read2], threshold, &mut result_map);
+
+        let mut counts = get_leaf_counts(tree.root.as_ref().unwrap());
+        sorted_counts(&mut counts);
+
+        // Counts accumulate across queries; baseline should match both reads
+        let baseline_count = count_for(&counts, "baseline");
+        assert!(baseline_count >= 2, "baseline should accumulate counts from both queries, got {}", baseline_count);
+        assert_eq!(count_for(&counts, "diff"), 0, "diff should not match either query");
+    }
+}

@@ -12,7 +12,6 @@ use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Write;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -276,16 +275,16 @@ fn main() {
             );
 
             // create an output directory
-            create_and_overwrite_directory(&out);
+            let _ = create_and_overwrite_directory(&out);
 
             // open output files
-            let mut pos_filter_file = if *pos_filter {
+            let pos_filter_file = if *pos_filter {
                 Some(File::create(out.join("POS_FILTERING.fa")).unwrap())
                     .map(|f| Arc::new(Mutex::new(f)))
             } else {
                 None
             };
-            let mut neg_filter_file = if *neg_filter {
+            let neg_filter_file = if *neg_filter {
                 Some(File::create(out.join("NEG_FILTERING.fa")).unwrap())
                     .map(|f| Arc::new(Mutex::new(f)))
             } else {

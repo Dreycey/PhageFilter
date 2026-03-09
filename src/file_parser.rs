@@ -1,8 +1,6 @@
 use bio::alphabets::dna;
 use bio::io::{fasta, fastq};
-use itertools::join;
 use rayon::prelude::*;
-use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
@@ -230,17 +228,17 @@ mod tests {
     fn test_get_lex_less() {
         // Test case 1: kmer and its reverse complement are equal
         let kmer = &vec![b'A', b'C', b'G', b'T'][..]; // <-- Lexically lesser
-        let revcomp_kmer = &vec![b'A', b'C', b'G', b'T'];
+        let _revcomp_kmer = &vec![b'A', b'C', b'G', b'T'];
         assert_eq!(get_lex_less(&kmer), vec![b'A', b'C', b'G', b'T']);
 
         // Test case 2: kmer is lexically less than its reverse complement
         let kmer2 = &vec![b'A', b'A', b'T', b'G'][..]; // <-- Lexically lesser
-        let revcomp_kmer2 = &vec![b'C', b'A', b'T', b'T'];
+        let _revcomp_kmer2 = &vec![b'C', b'A', b'T', b'T'];
         assert_eq!(get_lex_less(&kmer2), vec![b'A', b'A', b'T', b'G']);
 
         // Test case 3: kmer is lexically greater than its reverse complement
         let kmer3 = &vec![b'G', b'T', b'A', b'G'][..];
-        let revcomp_kmer3 = &vec![b'C', b'T', b'A', b'C']; // <-- Lexically lesser
+        let _revcomp_kmer3 = &vec![b'C', b'T', b'A', b'C']; // <-- Lexically lesser
         assert_eq!(get_lex_less(&kmer3), vec![b'C', b'T', b'A', b'C']);
     }
 }
