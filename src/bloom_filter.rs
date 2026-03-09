@@ -49,9 +49,7 @@ use std::cmp::{max, min};
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::hash::{BuildHasher, Hash};
-use std::io::Write;
-use std::io::{BufReader, BufWriter};
-use std::ops::Drop;
+use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 pub fn create_bloom_filter(
@@ -68,8 +66,7 @@ pub fn create_bloom_filter(
     let mut filter = BloomFilter::with_rate(false_pos_rate, largest_expected_genome, hash_states);
     filter.file_path = Some(full_bf_path);
 
-
-    return filter;
+    filter
 }
 
 /// Approximate Set Membership Structure
@@ -143,8 +140,12 @@ impl Debug for BloomFilter<HashSeed, HashSeed> {
 impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
     /// Calculates the distance between two bloom filters using the hamming_distance.
     fn distance(&self, other: &BloomFilter) -> usize {
-        let diff = self.bits.clone() ^ &other.bits;
-        diff.count_ones()
+        self.bits
+            .as_raw_slice()
+            .iter()
+            .zip(other.bits.as_raw_slice().iter())
+            .map(|(a, b)| (a ^ b).count_ones() as usize)
+            .sum()
     }
 }
 
@@ -214,7 +215,7 @@ impl BloomFilter<HashSeed, HashSeed> {
         BloomFilter {
             // Initialize all bits to zero
             bits: bitvec![0; num_bits],
-            num_hashes: num_hashes,
+            num_hashes,
             hash_builder_one,
             hash_builder_two,
             file_path: None,
@@ -297,16 +298,8 @@ where
         ) {
             let idx = (h % self.bits.len() as u64) as usize;
             match self.bits.get(idx) {
-                Some(b) => {
-                    if !b {
-                        contained = false;
-                    } else {
-                        contained = true;
-                    }
-                }
-                None => {
-                    panic!("Hash mod failed in insert");
-                }
+                Some(b) => contained = *b,
+                None => unreachable!("Hash mod failed in insert"),
             }
             self.bits.set(idx, true)
         }
@@ -331,7 +324,7 @@ where
                     }
                 }
                 None => {
-                    panic!("Hash mod failed");
+                    unreachable!("Hash mod failed in contains");
                 }
             }
         }
