@@ -472,6 +472,7 @@ mod tests {
         let kmers = file_parser::get_kmers("ATCAG".as_bytes(), &kmer_size);
         let record = file_parser::DNASequence::new(
             Some("ATCAG".as_bytes().to_vec()),
+            None,
             record_id.to_string(),
             kmers,
         );
