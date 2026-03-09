@@ -44,6 +44,32 @@ When a directory is provided as input, PhageFilter scans for files with the exte
 
 **Filtering output format:** When using `--pos-filter` or `--neg-filter`, the output files (`POS_FILTERING` / `NEG_FILTERING`) inherit the input format. FASTQ input produces FASTQ output (with quality scores preserved); FASTA input produces FASTA output.
 
+### Query Output
+
+The `query` command produces the following output files in the directory specified by `-o`:
+
+**`CLASSIFICATION.csv`** — A summary of read counts per genome. Each row is `genome_id,count` where `genome_id` is the sequence ID (from the FASTA header) of a reference genome in the gSBT, and `count` is the number of query reads that mapped to it. Only genomes with at least one mapped read are listed.
+
+**`POS_FILTERING.fa` / `POS_FILTERING.fq`** (when `--pos-filter` is used) — Reads that matched at least one genome in the gSBT. The header of each output read is annotated with the matched genome(s):
+
+```
+>read_id |genome_A,genome_B
+ACGTACGT...
+```
+or for FASTQ input:
+```
+@read_id |genome_A,genome_B
+ACGTACGT...
++
+IIIIIIII...
+```
+
+The `|`-delimited suffix lists all genome IDs whose bloom filter the read passed at the given threshold (`-f`). A read may match multiple genomes. The genome IDs correspond to the sequence IDs from the reference FASTA files used during `build`.
+
+**`NEG_FILTERING.fa` / `NEG_FILTERING.fq`** (when `--neg-filter` is used) — Reads that did **not** match any genome. These retain their original header with no annotation.
+
+**Matching semantics:** A read is considered to match a genome when at least the fraction of its k-mers specified by `--filter-threshold` (`-f`, default 1.0) are present in that genome's bloom filter. The match is binary (pass/fail at the threshold); no per-genome score or ranking is currently reported.
+
 ### Verbosity level
 
 The user can set the verbosity level. Below are different options for verbosity, which are available using the Rust [clap-verbosity-flag](https://crates.io/crates/clap-verbosity-flag) crate. If users want information about the tree being built, or other information about the particular run, use the `-vv` level of verbosity to get warnings and info.
