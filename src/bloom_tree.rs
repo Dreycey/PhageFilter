@@ -23,7 +23,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
-const TREE_FILENAME: &'static str = "tree.bin";
+const TREE_FILENAME: &str = "tree.bin";
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
@@ -125,7 +125,7 @@ impl BloomTree<HashSeed, HashSeed> {
     ///
     /// # Returns
     /// - self, a BloomTree instance.
-    pub fn insert(&mut self, genome: &file_parser::DNASequence) -> () {
+    pub fn insert(&mut self, genome: &file_parser::DNASequence) {
         log::info!(
             "(bloom tree; insert()) inserting {} into the tree",
             genome.id
@@ -164,7 +164,7 @@ impl BloomTree<HashSeed, HashSeed> {
         }
 
         log::debug!("(bloom tree; init()) Adding {}", genome.id);
-        return new_leaf_node;
+        new_leaf_node
     }
 
     /// Adds a BloomNode to a given BloomTree.
@@ -194,8 +194,8 @@ impl BloomTree<HashSeed, HashSeed> {
             self.node_union(&current_node, &node);
 
             // Calculate distances between the new node's bloom filter and left/right children
-            let right_distance = self.node_distance(&right, &node);
-            let left_distance = self.node_distance(&left, &node);
+            let right_distance = self.node_distance(right, &node);
+            let left_distance = self.node_distance(left, &node);
 
             if right_distance < left_distance {
                 current_node.right_child =
@@ -242,7 +242,7 @@ impl BloomTree<HashSeed, HashSeed> {
         new_internal_node.left_child = Some(current_node);
         new_internal_node.right_child = Some(new_node);
 
-        return new_internal_node;
+        new_internal_node
     }
 
     fn node_distance(&self, node_a: &BloomNode, node_b: &BloomNode) -> usize {
@@ -254,7 +254,7 @@ impl BloomTree<HashSeed, HashSeed> {
         let b4_node_b = self.get_bf(node_b);
         let bf_node_b = b4_node_b.read().unwrap();
 
-        return bf_node_a.distance(&bf_node_b);
+        bf_node_a.distance(&bf_node_b)
     }
 
     fn node_union(&self, node2modify: &BloomNode, node2add: &BloomNode) {
@@ -322,12 +322,8 @@ impl BloomTree<HashSeed, HashSeed> {
                         queue.push((node.right_child.as_mut().unwrap(), node_depth));
                     }
                 } else {
-                    if node.left_child.is_some() {
-                        node.left_child = None;
-                    }
-                    if node.right_child.is_some() {
-                        node.right_child = None;
-                    }
+                    node.left_child = None;
+                    node.right_child = None;
                 }
             }
         }
@@ -386,7 +382,7 @@ impl BloomTree<HashSeed, HashSeed> {
         // update cache information
         deserialized_tree.bf_cache = Box::new(bf_cache);
 
-        return deserialized_tree;
+        deserialized_tree
     }
 }
 
@@ -407,7 +403,7 @@ impl BloomNode {
             left_child: None,
             right_child: None,
             tax_id,
-            bloom_filter_path: bloom_filter_path.clone(),
+            bloom_filter_path,
             mapped_reads: 0,
         }
     }
@@ -418,7 +414,7 @@ impl BloomNode {
     ///
     /// `true` if the node is a leaf node; `false` otherwise.
     pub(crate) fn is_leafnode(&self) -> bool {
-        return self.left_child.is_none() && self.right_child.is_none();
+        self.left_child.is_none() && self.right_child.is_none()
     }
 }
 
@@ -473,7 +469,7 @@ mod tests {
 
         // create a DNA sequence.
         let record_id = "tmp_bloom";
-        let kmers = file_parser::get_kmers(&"ATCAG".as_bytes().to_vec(), &kmer_size);
+        let kmers = file_parser::get_kmers("ATCAG".as_bytes(), &kmer_size);
         let record = file_parser::DNASequence::new(
             Some("ATCAG".as_bytes().to_vec()),
             record_id.to_string(),
@@ -510,7 +506,7 @@ mod tests {
         let expected_tree = BloomTree {
             root: Some(Box::new(expected_root)),
             directory: Some(directory.clone()),
-            kmer_size: kmer_size,
+            kmer_size,
             hash_states: tree.hash_states.clone(),
             bf_cache: Box::new(cache::BFLruCache::new(cache_size, directory.clone())),
             false_pos_rate: false_positive_rate,
@@ -532,13 +528,13 @@ mod tests {
         let false_positive_rate = 0.001;
         let largest_expected_genome = 1000;
 
-        let kmers1 = file_parser::get_kmers(&"ATCAG".as_bytes().to_vec(), &kmer_size);
+        let kmers1 = file_parser::get_kmers("ATCAG".as_bytes(), &kmer_size);
         let record1 = file_parser::DNASequence::new(
             Some("ATCAG".as_bytes().to_vec()),
             "test1".to_string(),
             kmers1,
         );
-        let kmers2 = file_parser::get_kmers(&"TTTAG".as_bytes().to_vec(), &kmer_size);
+        let kmers2 = file_parser::get_kmers("TTTAG".as_bytes(), &kmer_size);
         let record2 = file_parser::DNASequence::new(
             Some("TTTAG".as_bytes().to_vec()),
             "test2".to_string(),
@@ -598,7 +594,7 @@ mod tests {
         let records: Vec<_> = sequences
             .iter()
             .map(|(id, seq)| {
-                let kmers = file_parser::get_kmers(&seq.as_bytes().to_vec(), &kmer_size);
+                let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
                 file_parser::DNASequence::new(
                     Some(seq.as_bytes().to_vec()),
                     id.to_string(),
@@ -672,7 +668,7 @@ mod tests {
         let records: Vec<_> = sequences
             .iter()
             .map(|(id, seq)| {
-                let kmers = file_parser::get_kmers(&seq.as_bytes().to_vec(), &kmer_size);
+                let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
                 file_parser::DNASequence::new(
                     Some(seq.as_bytes().to_vec()),
                     id.to_string(),
@@ -745,7 +741,7 @@ mod tests {
         let records: Vec<_> = sequences
             .iter()
             .map(|(id, seq)| {
-                let kmers = file_parser::get_kmers(&seq.as_bytes().to_vec(), &kmer_size);
+                let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
                 file_parser::DNASequence::new(
                     Some(seq.as_bytes().to_vec()),
                     id.to_string(),

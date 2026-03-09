@@ -45,7 +45,7 @@ fn query_passes(
         .par_iter()
         .filter(|kmer| bloom_filter.contains(kmer))
         .count();
-    return num_matches >= (threshold * read.kmers.len() as f32).ceil() as usize;
+    num_matches >= (threshold * read.kmers.len() as f32).ceil() as usize
 }
 
 /// Given a BloomTree, this method uses `_query_batch` by passing
@@ -70,18 +70,15 @@ pub(crate) fn query_batch(
     result_map: &mut result_map::ResultMap,
 ) -> BloomTree {
     let root_match = bloom_tree.root.take();
-    bloom_tree.root = match root_match {
-        Some(root) => Some(_query_batch(
+    let read_refs: Vec<&file_parser::DNASequence> = read_set.iter().collect();
+    bloom_tree.root = root_match.map(|root| _query_batch(
             &bloom_tree,
             root,
-            &read_set.iter().collect::<Vec<&file_parser::DNASequence>>()[..],
+            &read_refs,
             threshold,
-            bloom_tree.kmer_size,
             result_map,
-        )),
-        _ => None,
-    };
-    return bloom_tree;
+        ));
+    bloom_tree
 }
 
 /// Given a root node, this method queries all children nodes
@@ -104,7 +101,6 @@ fn _query_batch(
     mut bloom_node: Box<BloomNode>,
     read_set: &[&file_parser::DNASequence],
     threshold: f32,
-    kmer_size: usize,
     result_map: &mut result_map::ResultMap,
 ) -> Box<BloomNode> {
     // get bloom filter
@@ -117,7 +113,7 @@ fn _query_batch(
     let pass: Vec<&file_parser::DNASequence> = read_set
         .par_iter()
         .filter(|&&read| query_passes(&bf_bloom_node, read, threshold))
-        .map(|&read| read) // Use map() to get the right item type
+        .copied()
         .collect();
 
     if !bloom_node.is_leafnode() {
@@ -130,7 +126,6 @@ fn _query_batch(
                     left_child,
                     &queue[..],
                     threshold,
-                    kmer_size,
                     result_map,
                 ));
             }
@@ -140,7 +135,6 @@ fn _query_batch(
                     right_child,
                     &queue[..],
                     threshold,
-                    kmer_size,
                     result_map,
                 ));
             }
@@ -150,18 +144,17 @@ fn _query_batch(
 
         // Create maping between reads and genomes.
         let genome_id = bloom_node.tax_id.clone().unwrap();
-        if pass.len() > 0 {
+        if !pass.is_empty() {
             let first_read: &&file_parser::DNASequence = pass.first().unwrap();
             if first_read.sequence.is_some() {
                 for read in pass.iter() {
-                    let read_id = read.id.clone();
-                    result_map.add_read_map(read_id.clone(), genome_id.clone());
+                    result_map.add_read_map(read.id.clone(), genome_id.clone());
                 }
             }
         }
     }
 
-    return bloom_node;
+    bloom_node
 }
 
 /// Recursively traverses the bloom tree, saving lead node mappings to a
@@ -184,7 +177,7 @@ pub(crate) fn save_leaf_counts(bloom_node: &BloomNode, output_file: &mut File) {
     for (id, count) in nonzero_counts {
         let tax_maps: String = format!("{},{}\n", id, count);
         output_file
-            .write(tax_maps.as_bytes())
+            .write_all(tax_maps.as_bytes())
             .expect("problem writing to output file!");
     }
 }
@@ -201,7 +194,7 @@ pub(crate) fn save_leaf_counts(bloom_node: &BloomNode, output_file: &mut File) {
 ///
 /// # Panics
 /// - If a leaf node does not have a taxonomic ID
-pub(crate) fn get_leaf_counts<'a>(bloom_node: &'a BloomNode) -> Vec<(&'a str, usize)> {
+pub(crate) fn get_leaf_counts(bloom_node: &BloomNode) -> Vec<(&str, usize)> {
     if bloom_node.is_leafnode() {
         // TODO: we should use iterators instead of vectors since it will be
         //  much more efficient. May require building a new iterator type for
@@ -243,7 +236,7 @@ mod tests {
         dir
     }
 
-    fn sorted_counts<'a>(counts: &mut Vec<(&'a str, usize)>) {
+    fn sorted_counts(counts: &mut Vec<(&str, usize)>) {
         counts.sort_by_key(|(id, _)| id.to_string());
     }
 
@@ -267,7 +260,7 @@ mod tests {
         tree
     }
 
-    fn count_for<'a>(counts: &[(&'a str, usize)], name: &str) -> usize {
+    fn count_for(counts: &[(&str, usize)], name: &str) -> usize {
         counts.iter().find(|(id, _)| *id == name).map(|(_, c)| *c).unwrap_or(0)
     }
 

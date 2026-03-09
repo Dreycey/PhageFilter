@@ -1,5 +1,5 @@
 // utilities for hashing
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::{BuildHasher, Hash};
 pub(in crate::bloom_filter) struct HashIter {
     h1: u64,
     h2: u64,
@@ -34,17 +34,13 @@ impl HashIter {
         build_hasher_one: &R,
         build_hasher_two: &S,
     ) -> HashIter {
-        let mut hasher_one = build_hasher_one.build_hasher();
-        let mut hasher_two = build_hasher_two.build_hasher();
-        item.hash(&mut hasher_one);
-        item.hash(&mut hasher_two);
-        let h1 = hasher_one.finish();
-        let h2 = hasher_two.finish();
+        let h1 = build_hasher_one.hash_one(&item);
+        let h2 = build_hasher_two.hash_one(&item);
         HashIter {
-            h1: h1,
-            h2: h2,
+            h1,
+            h2,
             i: 0,
-            count: count,
+            count,
         }
     }
 }
@@ -59,14 +55,10 @@ mod tests {
         let s2 = HashSeed::new();
         let probe = HashIter::from(item, count, &s1, &s2);
         let h1 = {
-            let mut h = s1.build_hasher();
-            item.hash(&mut h);
-            h.finish()
+            s1.hash_one(item)
         };
         let h2 = {
-            let mut h = s2.build_hasher();
-            item.hash(&mut h);
-            h.finish()
+            s2.hash_one(item)
         };
         (probe, h1, h2)
     }
