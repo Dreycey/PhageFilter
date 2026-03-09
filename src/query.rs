@@ -243,7 +243,7 @@ mod tests {
     fn make_seq(seq: &str, id: &str, kmer_size: usize) -> file_parser::DNASequence {
         let bytes = seq.as_bytes().to_vec();
         let kmers = file_parser::get_kmers(&bytes, &kmer_size);
-        file_parser::DNASequence::new(Some(bytes), id.to_string(), kmers)
+        file_parser::DNASequence::new(Some(bytes), None, id.to_string(), kmers)
     }
 
     fn build_four_genome_tree(kmer_size: usize, dir: &PathBuf) -> BloomTree {
