@@ -310,16 +310,22 @@ fn main() {
             // create an output directory
             let _ = create_and_overwrite_directory(out);
 
+            // detect input format to match output format
+            let input_is_fastq = readqueue.peek_format() == file_parser::SequenceFormat::Fastq;
+            let filter_ext = if input_is_fastq { "fq" } else { "fa" };
+
             // open output files
             let pos_filter_file = if *pos_filter {
-                Some(File::create(out.join("POS_FILTERING.fa")).unwrap())
-                    .map(|f| Arc::new(Mutex::new(f)))
+                Some(Arc::new(Mutex::new(
+                    File::create(out.join(format!("POS_FILTERING.{}", filter_ext))).unwrap(),
+                )))
             } else {
                 None
             };
             let neg_filter_file = if *neg_filter {
-                Some(File::create(out.join("NEG_FILTERING.fa")).unwrap())
-                    .map(|f| Arc::new(Mutex::new(f)))
+                Some(Arc::new(Mutex::new(
+                    File::create(out.join(format!("NEG_FILTERING.{}", filter_ext))).unwrap(),
+                )))
             } else {
                 None
             };
@@ -343,15 +349,13 @@ fn main() {
                                 .unwrap();
                         if result_map.read_mapped(&read.id) {
                             if let Some(pos_file) = pos_filter_file.as_ref() {
-                                // Lock the Mutex before writing to the file
                                 let mut pos_file = pos_file.lock().unwrap();
-                                writeln!(pos_file, ">{}\n{}", result_map.get_ext_id(&read.id), seq)
-                                    .unwrap();
+                                let id = result_map.get_ext_id(&read.id);
+                                write_record(&mut *pos_file, &id, &seq, read.quality.as_deref());
                             }
                         } else if let Some(neg_file) = neg_filter_file.as_ref() {
-                            // Lock the Mutex before writing to the file
                             let mut neg_file = neg_file.lock().unwrap();
-                            writeln!(neg_file, ">{}\n{}", read.id, seq).unwrap();
+                            write_record(&mut *neg_file, &read.id, &seq, read.quality.as_deref());
                         }
                     });
                 }
@@ -384,4 +388,17 @@ fn create_and_overwrite_directory(dir_path: &Path) -> io::Result<()> {
 
     // Create the directory
     fs::create_dir(dir_path)
+}
+
+/// Write a sequence record in FASTQ format (if quality is present) or FASTA format.
+fn write_record(writer: &mut impl Write, id: &str, seq: &str, quality: Option<&[u8]>) {
+    match quality {
+        Some(qual) => {
+            let qual_str = String::from_utf8_lossy(qual);
+            writeln!(writer, "@{}\n{}\n+\n{}", id, seq, qual_str).unwrap();
+        }
+        None => {
+            writeln!(writer, ">{}\n{}", id, seq).unwrap();
+        }
+    }
 }

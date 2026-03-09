@@ -150,16 +150,23 @@ pub fn get_kmers(sequence: &[u8], &kmer_size: &usize) -> Vec<Vec<u8>> {
 #[derive(Debug, Clone)]
 pub struct DNASequence {
     pub sequence: Option<Vec<u8>>,
+    pub quality: Option<Vec<u8>>,
     pub id: String,
     pub kmers: Vec<Vec<u8>>,
 }
 
 impl DNASequence {
-    pub fn new(sequence: Option<Vec<u8>>, id: String, kmers: Vec<Vec<u8>>) -> DNASequence {
+    pub fn new(
+        sequence: Option<Vec<u8>>,
+        quality: Option<Vec<u8>>,
+        id: String,
+        kmers: Vec<Vec<u8>>,
+    ) -> DNASequence {
         DNASequence {
             id,
-            kmers, //get_kmers(&sequence.as_ref().unwrap(), &kmer_size),
+            kmers,
             sequence,
+            quality,
         }
     }
 }
@@ -182,19 +189,38 @@ impl RecordTypes {
     /// # Panics
     /// - N/A
     pub fn next_read(&mut self, kmer_size: usize, filtering: bool) -> Option<DNASequence> {
-        let (id, seq_bytes) = match self {
-            RecordTypes::FastaRecords(records) => {
-                let rec = records.next()?.unwrap();
-                (rec.id().to_string(), rec.seq().to_vec())
+        match self {
+            RecordTypes::FastaRecords(record) => {
+                let record = record.next();
+                if record.is_none() {
+                    return None;
+                }
+                let seq_record = record.unwrap().unwrap();
+                let id = seq_record.id().to_string();
+                let mut sequence = Some(seq_record.seq().to_vec());
+                let kmers = get_kmers(&sequence.as_ref().unwrap(), &kmer_size);
+                if !filtering {
+                    sequence = None;
+                }
+                Some(DNASequence::new(sequence, None, id, kmers))
             }
-            RecordTypes::FastqRecords(records) => {
-                let rec = records.next()?.unwrap();
-                (rec.id().to_string(), rec.seq().to_vec())
+            RecordTypes::FastqRecords(record) => {
+                let record = record.next();
+                if record.is_none() {
+                    return None;
+                }
+                let seq_record = record.unwrap().unwrap();
+                let mut sequence = Some(seq_record.seq().to_vec());
+                let id = seq_record.id().to_string();
+                let kmers = get_kmers(&sequence.as_ref().unwrap(), &kmer_size);
+                let mut quality = Some(seq_record.qual().to_vec());
+                if !filtering {
+                    sequence = None;
+                    quality = None;
+                }
+                Some(DNASequence::new(sequence, quality, id, kmers))
             }
-        };
-        let kmers = get_kmers(&seq_bytes, &kmer_size);
-        let sequence = if filtering { Some(seq_bytes) } else { None };
-        Some(DNASequence::new(sequence, id, kmers))
+        }
     }
 }
 
@@ -262,6 +288,15 @@ impl ReadQueue {
             filtering,
             format_override,
         }
+    }
+
+    /// Detect the sequence format of the first file in the queue.
+    /// Useful for deciding the output file format before processing begins.
+    pub fn peek_format(&self) -> SequenceFormat {
+        self.filequeue
+            .last()
+            .map(|f| detect_format(f, self.format_override))
+            .unwrap_or(SequenceFormat::Fasta)
     }
 }
 
@@ -514,6 +549,56 @@ mod tests {
         assert!(!files.iter().any(|f| f.ends_with("notes.txt")));
         // random.gz has no inner sequence extension, should be excluded
         assert!(!files.iter().any(|f| f.ends_with("random.gz")));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_fastq_quality_preserved() {
+        let dir = create_temp_dir("test_fastq_quality_preserved");
+        let path = dir.join("reads.fq");
+        let seq = "ACGTACGTACGTACGTACGTACGTACGT";
+        let qual = "IIIIIIIIIIIIIIIIIIIIIIIIIIIII";
+        {
+            let mut f = File::create(&path).unwrap();
+            writeln!(f, "@read1\n{}\n+\n{}", seq, qual).unwrap();
+        }
+        // filtering=true to retain sequence and quality
+        let mut queue = ReadQueue::new(path.to_str().unwrap(), 10, 5, true);
+        let block = queue.next_block();
+        assert_eq!(block.len(), 1);
+        assert_eq!(block[0].id, "read1");
+        assert!(block[0].quality.is_some());
+        assert_eq!(
+            std::str::from_utf8(block[0].quality.as_ref().unwrap()).unwrap(),
+            qual,
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_fasta_has_no_quality() {
+        let dir = create_temp_dir("test_fasta_has_no_quality");
+        let path = dir.join("genome.fa");
+        write_fasta(&path, "seq1", "ACGTACGTACGTACGTACGTACGTACGT");
+        let mut queue = ReadQueue::new(path.to_str().unwrap(), 10, 5, true);
+        let block = queue.next_block();
+        assert_eq!(block.len(), 1);
+        assert!(block[0].quality.is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_peek_format() {
+        let dir = create_temp_dir("test_peek_format");
+        write_fasta(&dir.join("genome.fa"), "s1", "ACGT");
+        write_fastq(&dir.join("reads.fq"), "r1", "ACGT");
+
+        let queue_fa = ReadQueue::new(dir.join("genome.fa").to_str().unwrap(), 10, 5, false);
+        assert_eq!(queue_fa.peek_format(), SequenceFormat::Fasta);
+
+        let queue_fq = ReadQueue::new(dir.join("reads.fq").to_str().unwrap(), 10, 5, false);
+        assert_eq!(queue_fq.peek_format(), SequenceFormat::Fastq);
 
         let _ = fs::remove_dir_all(&dir);
     }
