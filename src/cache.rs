@@ -1,6 +1,6 @@
 use crate::bloom_filter::BloomFilter;
-use crate::Path;
 use crate::PathBuf;
+use std::path::Path;
 ///
 /// This module contains the bloom filter cache.
 ///
@@ -8,7 +8,7 @@ use lru::LruCache;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
- 
+
 //#[derive(Debug)]
 pub struct BFLruCache {
     cache: RwLock<LruCache<PathBuf, Arc<RwLock<BloomFilter>>>>,
@@ -21,9 +21,9 @@ pub struct BFLruCache {
 /// BllomTree is loosely coupled with the cache. Additionally,
 /// it allows for dependency injection and creating Mocks for testing.
 pub trait BloomFilterCache {
-    fn get_filter(&self, key: &PathBuf) -> Option<Arc<RwLock<BloomFilter>>>;
+    fn get_filter(&self, key: &Path) -> Option<Arc<RwLock<BloomFilter>>>;
     fn get_capacity(&self) -> usize;
-    fn add_filter(&self, key: &PathBuf, bloom_filter: BloomFilter);
+    fn add_filter(&self, key: &Path, bloom_filter: BloomFilter);
 }
 
 impl fmt::Debug for dyn BloomFilterCache {
@@ -39,7 +39,7 @@ impl BFLruCache {
         Self {
             cache: RwLock::new(LruCache::new(NonZeroUsize::new(capacity).unwrap())),
             capacity,
-            bf_path
+            bf_path,
         }
     }
 }
@@ -53,9 +53,10 @@ impl fmt::Debug for BFLruCache {
 }
 
 impl BloomFilterCache for BFLruCache {
-    fn get_filter(&self, key: &PathBuf) -> Option<Arc<RwLock<BloomFilter>>> {
+    fn get_filter(&self, key: &Path) -> Option<Arc<RwLock<BloomFilter>>> {
         let mut cache_lock = self.cache.write().unwrap();
-        if let Some(filter) = cache_lock.get(key) {
+        let key_buf = key.to_path_buf();
+        if let Some(filter) = cache_lock.get(&key_buf) {
             Some(filter.clone())
         } else {
             let filter_path: PathBuf = self.bf_path.join(key).to_path_buf();
@@ -66,7 +67,10 @@ impl BloomFilterCache for BFLruCache {
                 cache_lock.put(key.to_path_buf(), arc_filter.clone());
                 Some(arc_filter)
             } else {
-                println!("[Cache; get_filter()] the following bloom filter is not saved to disk: {:?}", filter_path);
+                log::warn!(
+                    "Cache miss: bloom filter not found on disk: {:?}",
+                    filter_path
+                );
                 None
             }
         }
@@ -76,7 +80,7 @@ impl BloomFilterCache for BFLruCache {
         self.capacity
     }
 
-    fn add_filter(&self, key: &PathBuf, bloom_filter: BloomFilter) {
+    fn add_filter(&self, key: &Path, bloom_filter: BloomFilter) {
         let mut cache_lock = self.cache.write().unwrap();
         let arc_filter = Arc::new(RwLock::new(bloom_filter));
         cache_lock.put(key.to_path_buf(), arc_filter);
@@ -126,10 +130,10 @@ mod tests {
             hash_states,
             bf_disk_key.clone(),
             false_pos_rate,
-            largest_expected_genome
+            largest_expected_genome,
         );
 
-        // create cache
+        //create cache
         let cache = BFLruCache::new(1, PathBuf::from(""));
         cache.add_filter(&bf_disk_key, bloomfilter);
 

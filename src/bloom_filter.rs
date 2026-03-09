@@ -49,9 +49,7 @@ use std::cmp::{max, min};
 use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::hash::{BuildHasher, Hash};
-use std::io::Write;
-use std::io::{BufReader, BufWriter};
-use std::ops::Drop;
+use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 pub fn create_bloom_filter(
@@ -68,11 +66,11 @@ pub fn create_bloom_filter(
     let mut filter = BloomFilter::with_rate(false_pos_rate, largest_expected_genome, hash_states);
     filter.file_path = Some(full_bf_path);
 
-
-    return filter;
+    filter
 }
 
 /// Approximate Set Membership Structure
+#[allow(dead_code)]
 pub trait ASMS {
     fn insert<T: Hash>(&mut self, item: &T) -> bool;
     fn contains<T: Hash>(&self, item: &T) -> bool;
@@ -142,8 +140,12 @@ impl Debug for BloomFilter<HashSeed, HashSeed> {
 impl DistanceChecker for BloomFilter<HashSeed, HashSeed> {
     /// Calculates the distance between two bloom filters using the hamming_distance.
     fn distance(&self, other: &BloomFilter) -> usize {
-        let diff = self.bits.clone() ^ &other.bits;
-        diff.count_ones()
+        self.bits
+            .as_raw_slice()
+            .iter()
+            .zip(other.bits.as_raw_slice().iter())
+            .map(|(a, b)| (a ^ b).count_ones() as usize)
+            .sum()
     }
 }
 
@@ -213,7 +215,7 @@ impl BloomFilter<HashSeed, HashSeed> {
         BloomFilter {
             // Initialize all bits to zero
             bits: bitvec![0; num_bits],
-            num_hashes: num_hashes,
+            num_hashes,
             hash_builder_one,
             hash_builder_two,
             file_path: None,
@@ -238,11 +240,13 @@ impl BloomFilter<HashSeed, HashSeed> {
     }
 
     /// Get the number of bits this BloomFilter is using
+    #[allow(dead_code)]
     pub fn num_bits(&self) -> usize {
         self.bits.len()
     }
 
     /// Get the number of hash functions this BloomFilter is using
+    #[allow(dead_code)]
     pub fn num_hashes(&self) -> u32 {
         self.num_hashes
     }
@@ -254,6 +258,7 @@ impl BloomFilter<HashSeed, HashSeed> {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
+    #[allow(dead_code)]
     fn intersect(&mut self, other: &BloomFilter) {
         self.modified = true;
         self.bits &= &other.bits;
@@ -293,16 +298,8 @@ where
         ) {
             let idx = (h % self.bits.len() as u64) as usize;
             match self.bits.get(idx) {
-                Some(b) => {
-                    if !b {
-                        contained = false;
-                    } else {
-                        contained = true;
-                    }
-                }
-                None => {
-                    panic!("Hash mod failed in insert");
-                }
+                Some(b) => contained = *b,
+                None => unreachable!("Hash mod failed in insert"),
             }
             self.bits.set(idx, true)
         }
@@ -327,7 +324,7 @@ where
                     }
                 }
                 None => {
-                    panic!("Hash mod failed");
+                    unreachable!("Hash mod failed in contains");
                 }
             }
         }
@@ -336,7 +333,7 @@ where
 
     /// Remove all values from this BloomFilter
     fn clear(&mut self) {
-        self.bits.clear();
+        self.bits.fill(false);
     }
 }
 
@@ -391,5 +388,89 @@ mod tests {
         assert_eq!(b1.distance(&b1), 0);
         assert_eq!(b2.distance(&b2), 0);
         assert_eq!(b_none.distance(&b_all), 8);
+    }
+
+    fn make_hash_states() -> (HashSeed, HashSeed) {
+        (HashSeed::new(), HashSeed::new())
+    }
+
+    #[test]
+    fn test_insert_contains() {
+        let mut bf = BloomFilter::with_rate(0.01, 100, make_hash_states());
+        bf.insert(&"apple");
+        bf.insert(&"banana");
+        bf.insert(&"cherry");
+
+        assert!(bf.contains(&"apple"));
+        assert!(bf.contains(&"banana"));
+        assert!(bf.contains(&"cherry"));
+        assert!(!bf.contains(&"dragonfruit"));
+        assert!(!bf.contains(&"elderberry"));
+    }
+
+    #[test]
+    fn test_union() {
+        let states = make_hash_states();
+        let mut bf1 = BloomFilter::with_rate(0.01, 100, states.clone());
+        let mut bf2 = BloomFilter::with_rate(0.01, 100, states);
+
+        bf1.insert(&"alpha");
+        bf1.insert(&"beta");
+        bf2.insert(&"gamma");
+        bf2.insert(&"delta");
+
+        bf1.union(&bf2);
+
+        assert!(bf1.contains(&"alpha"));
+        assert!(bf1.contains(&"beta"));
+        assert!(bf1.contains(&"gamma"));
+        assert!(bf1.contains(&"delta"));
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut bf = BloomFilter::with_rate(0.01, 100, make_hash_states());
+        bf.insert(&"one");
+        bf.insert(&"two");
+        assert!(bf.contains(&"one"));
+        assert!(bf.contains(&"two"));
+
+        bf.clear();
+
+        assert!(!bf.contains(&"one"));
+        assert!(!bf.contains(&"two"));
+    }
+
+    #[test]
+    fn test_save_load_roundtrip() {
+        let dir = PathBuf::from("tmp_testing_bf_roundtrip");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("test_roundtrip.bf");
+
+        let mut bf = BloomFilter::with_rate(0.01, 100, make_hash_states());
+        bf.insert(&"foo");
+        bf.insert(&"bar");
+        bf.save_to_file(&file_path);
+
+        let loaded = BloomFilter::load_from_file(&file_path);
+        assert!(loaded.contains(&"foo"));
+        assert!(loaded.contains(&"bar"));
+        assert!(!loaded.contains(&"baz"));
+
+        // Ensure the loaded filter's bits match the original
+        assert_eq!(bf.bits, loaded.bits);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_with_rate_sizing() {
+        let bits = needed_bits(0.01, 1000);
+        let hashes = optimal_num_hashes(bits, 1000);
+
+        assert!(bits > 0, "needed_bits should be positive");
+        assert!(hashes > 0, "optimal_num_hashes should be positive");
+        // For fpr=0.01, we expect roughly ~9585 bits for 1000 items
+        assert!(bits > 1000, "bits should exceed num_items for a low fpr");
     }
 }

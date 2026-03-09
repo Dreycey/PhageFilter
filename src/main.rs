@@ -6,14 +6,12 @@ mod query;
 mod result_map;
 use clap::{arg, Parser, Subcommand};
 use clap_verbosity_flag::Verbosity;
-use log;
 use rayon::prelude::*;
 use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
@@ -128,7 +126,7 @@ fn main() {
         } => {
             // initial message to show used parameters.
             log::info!(
-                "\n Build input-  \n\tdb:{:?} \n\tthreads:{} \n\tkmersize:{} \n",
+                "\n Build input-  \n\tdb path:{:?} \n\tthreads:{} \n\tkmersize:{} \n",
                 db_path,
                 threads,
                 kmer_size
@@ -142,21 +140,22 @@ fn main() {
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(&genomes, 1, *kmer_size, false);
+                file_parser::ReadQueue::new(genomes, 1, *kmer_size, false);
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             // create a new cache
             let bloomfilter_cache = cache::BFLruCache::new(*cache_size, db_path.clone());
 
             // build: bloom trees
-            print!("Building the SBT... \n");
+            println!("Building the SBT...");
             let mut bloom_tree = bloom_tree::BloomTree::new(
                 *kmer_size,
-                &db_path,
+                db_path,
                 bloomfilter_cache,
                 *false_pos_rate,
                 *largest_genome,
             );
+
             while !genome_block.is_empty() {
                 for genome in genome_block {
                     bloom_tree.insert(&genome);
@@ -166,8 +165,9 @@ fn main() {
 
             // save tree to disk
             bloom_tree.save(db_path);
-            print!("Finished. \n");
+            println!("Finished.");
         }
+
         Commands::Add {
             genomes,
             db_path,
@@ -188,18 +188,18 @@ fn main() {
                 .unwrap();
 
             // build: bloom trees
-            print!("Adding new genomes to the SBT... \n");
+            println!("Adding new genomes to the SBT...");
 
             // create a new cache
             let bloomfilter_cache = cache::BFLruCache::new(*cache_size, db_path.clone());
 
             // load bloom tree from disk
             let mut bloom_tree: bloom_tree::BloomTree =
-                bloom_tree::BloomTree::load(&db_path, bloomfilter_cache);
+                bloom_tree::BloomTree::load(db_path, bloomfilter_cache);
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(&genomes, 1, bloom_tree.kmer_size, false);
+                file_parser::ReadQueue::new(genomes, 1, bloom_tree.kmer_size, false);
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             while !genome_block.is_empty() {
@@ -211,15 +211,16 @@ fn main() {
 
             // save tree to disk
             bloom_tree.save(db_path);
-            print!("Finished. \n");
+            println!("Finished.");
         }
+
         Commands::Query {
             reads,
             out,
             db_path,
             threads,
             block_size_reads,
-            filter_threshold: cuttoff_threshold,
+            filter_threshold: cutoff_threshold,
             cache_size,
             search_depth,
             pos_filter,
@@ -227,8 +228,8 @@ fn main() {
         } => {
             // initial message to show used parameters.
             log::info!(
-                "\n Query input- \n\treads:{} \n\tthreads:{}, \n\tout:{:?}, \n\tdb_path:{:?}, \n\tthreads:{} \n\tcuttoff_threshold:{} \n",
-                reads, threads, out, db_path, threads, cuttoff_threshold
+                "\n Query input- \n\treads:{} \n\tthreads:{}, \n\tout:{:?}, \n\tdb_path:{:?}, \n\tthreads:{} \n\tcutoff_threshold:{} \n",
+                reads, threads, out, db_path, threads, cutoff_threshold
             );
 
             // number of threads to run
@@ -242,44 +243,47 @@ fn main() {
 
             // load bloom tree from disk
             let mut bloom_tree: bloom_tree::BloomTree =
-                bloom_tree::BloomTree::load(&db_path, bloomfilter_cache);
+                bloom_tree::BloomTree::load(db_path, bloomfilter_cache);
 
             // create a result map
             let mut result_map = result_map::ResultMap::new();
 
             // parse reads
             println!("Querying reads...");
-            println!("Filtering settings: positive={}; negative={}", pos_filter, neg_filter);
+            println!(
+                "Filtering settings: positive={}; negative={}",
+                pos_filter, neg_filter
+            );
             let filtering_option = *pos_filter || *neg_filter;
 
             // changing search depth (i.e. prunes the tree to a search depth)
-            if search_depth.is_some() {
+            if let Some(depth) = search_depth {
                 if !filtering_option {
                     println!("If using a search depth, use a filtering flag (--pos-filter or --neg-filter, or both!)");
                 }
-                println!("Search depth settings: {:?}", search_depth.unwrap());
-                bloom_tree.prune_tree(search_depth.unwrap());  
+                println!("Search depth settings: {}", depth);
+                bloom_tree.prune_tree(*depth);
             }
 
             // create a read buffer
             let mut readqueue = file_parser::ReadQueue::new(
-                &reads,
+                reads,
                 *block_size_reads,
                 bloom_tree.kmer_size,
                 filtering_option,
             );
 
             // create an output directory
-            create_and_overwrite_directory(&out);
+            let _ = create_and_overwrite_directory(out);
 
             // open output files
-            let mut pos_filter_file = if *pos_filter {
+            let pos_filter_file = if *pos_filter {
                 Some(File::create(out.join("POS_FILTERING.fa")).unwrap())
                     .map(|f| Arc::new(Mutex::new(f)))
             } else {
                 None
             };
-            let mut neg_filter_file = if *neg_filter {
+            let neg_filter_file = if *neg_filter {
                 Some(File::create(out.join("NEG_FILTERING.fa")).unwrap())
                     .map(|f| Arc::new(Mutex::new(f)))
             } else {
@@ -292,8 +296,8 @@ fn main() {
                 // query the read batch.
                 bloom_tree = query::query_batch(
                     bloom_tree,
-                    &mut read_block,
-                    *cuttoff_threshold,
+                    &read_block,
+                    *cutoff_threshold,
                     &mut result_map,
                 );
 
@@ -318,13 +322,12 @@ fn main() {
                     });
                 }
 
-                // empty result map
+                // empty result map 
                 result_map.empty_read_map();
 
                 // get next read block
                 read_block = readqueue.next_block();
             }
-
 
             // open output file to write to
             let mut out_file = File::create(out.join("CLASSIFICATION.csv")).unwrap();
@@ -334,9 +337,9 @@ fn main() {
             println!("Finished.");
         }
     }
-}
+}  
 
-fn create_and_overwrite_directory(dir_path: &PathBuf) -> io::Result<()> {
+fn create_and_overwrite_directory(dir_path: &Path) -> io::Result<()> {
     // Check if the directory exists
     if let Ok(metadata) = fs::metadata(dir_path) {
         if metadata.is_dir() {

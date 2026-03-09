@@ -9,19 +9,21 @@ use crate::bloom_filter::hasher::HashSeed;
 /// ```rust
 /// let mut bloom_node = bloom_tree::create_bloom_tree(parsed_genomes, &kmer_size);
 /// ```
-use crate::bloom_filter::{BloomFilter, create_bloom_filter, DistanceChecker, ASMS};
-use crate::cache::{BFLruCache, BloomFilterCache};
-use crate::file_parser;
+use crate::bloom_filter::{create_bloom_filter, BloomFilter, DistanceChecker, ASMS};
 use crate::Arc;
-use std::sync::RwLock;
+use crate::{
+    cache::{BFLruCache, BloomFilterCache},
+    file_parser,
+};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
-const TREE_FILENAME: &'static str = "tree.bin";
+const TREE_FILENAME: &str = "tree.bin";
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct BloomTree<R = HashSeed, S = HashSeed> {
@@ -123,7 +125,7 @@ impl BloomTree<HashSeed, HashSeed> {
     ///
     /// # Returns
     /// - self, a BloomTree instance.
-    pub fn insert(&mut self, genome: &file_parser::DNASequence) -> () {
+    pub fn insert(&mut self, genome: &file_parser::DNASequence) {
         log::info!(
             "(bloom tree; insert()) inserting {} into the tree",
             genome.id
@@ -162,7 +164,7 @@ impl BloomTree<HashSeed, HashSeed> {
         }
 
         log::debug!("(bloom tree; init()) Adding {}", genome.id);
-        return new_leaf_node;
+        new_leaf_node
     }
 
     /// Adds a BloomNode to a given BloomTree.
@@ -192,8 +194,8 @@ impl BloomTree<HashSeed, HashSeed> {
             self.node_union(&current_node, &node);
 
             // Calculate distances between the new node's bloom filter and left/right children
-            let right_distance = self.node_distance(&right, &node);
-            let left_distance = self.node_distance(&left, &node);
+            let right_distance = self.node_distance(right, &node);
+            let left_distance = self.node_distance(left, &node);
 
             if right_distance < left_distance {
                 current_node.right_child =
@@ -240,19 +242,19 @@ impl BloomTree<HashSeed, HashSeed> {
         new_internal_node.left_child = Some(current_node);
         new_internal_node.right_child = Some(new_node);
 
-        return new_internal_node;
+        new_internal_node
     }
-    
-    fn node_distance(&self, node_a: &BloomNode, node_b: &BloomNode) -> usize {
-            // get BF for node a
-            let b4_node_a = self.get_bf(node_a);
-            let bf_node_a = b4_node_a.read().unwrap();
-    
-            // get BF for node b
-            let b4_node_b = self.get_bf(node_b);
-            let bf_node_b = b4_node_b.read().unwrap();
 
-            return bf_node_a.distance(&bf_node_b);
+    fn node_distance(&self, node_a: &BloomNode, node_b: &BloomNode) -> usize {
+        // get BF for node a
+        let b4_node_a = self.get_bf(node_a);
+        let bf_node_a = b4_node_a.read().unwrap();
+
+        // get BF for node b
+        let b4_node_b = self.get_bf(node_b);
+        let bf_node_b = b4_node_b.read().unwrap();
+
+        bf_node_a.distance(&bf_node_b)
     }
 
     fn node_union(&self, node2modify: &BloomNode, node2add: &BloomNode) {
@@ -269,7 +271,9 @@ impl BloomTree<HashSeed, HashSeed> {
     }
 
     fn get_bf(&self, bloom_node: &BloomNode) -> Arc<RwLock<BloomFilter>> {
-        self.bf_cache.get_filter(&bloom_node.bloom_filter_path).expect("BF was not found!")
+        self.bf_cache
+            .get_filter(&bloom_node.bloom_filter_path)
+            .expect("BF was not found!")
     }
 
     fn make_bloom_node(&self, nodeid: String) -> Box<BloomNode> {
@@ -294,11 +298,13 @@ impl BloomTree<HashSeed, HashSeed> {
         Box::new(bloomnode)
     }
 
-
     /// - if the directory does not exist.
     pub fn prune_tree(&mut self, search_depth: usize) {
         // print where the tree is being saved.
-        log::info!(" (bloom tree; prune_tree()) pruning tree to depth of: {}", search_depth);
+        log::info!(
+            " (bloom tree; prune_tree()) pruning tree to depth of: {}",
+            search_depth
+        );
         // set up queue
         let mut queue: Vec<(&mut Box<BloomNode>, usize)> = vec![];
         let root = self.root.as_mut().unwrap();
@@ -316,12 +322,8 @@ impl BloomTree<HashSeed, HashSeed> {
                         queue.push((node.right_child.as_mut().unwrap(), node_depth));
                     }
                 } else {
-                    if node.left_child.is_some() {
-                        node.left_child = None;
-                    }
-                    if node.right_child.is_some() {
-                        node.right_child = None;
-                    }
+                    node.left_child = None;
+                    node.right_child = None;
                 }
             }
         }
@@ -380,7 +382,7 @@ impl BloomTree<HashSeed, HashSeed> {
         // update cache information
         deserialized_tree.bf_cache = Box::new(bf_cache);
 
-        return deserialized_tree;
+        deserialized_tree
     }
 }
 
@@ -401,7 +403,7 @@ impl BloomNode {
             left_child: None,
             right_child: None,
             tax_id,
-            bloom_filter_path: bloom_filter_path.clone(),
+            bloom_filter_path,
             mapped_reads: 0,
         }
     }
@@ -412,7 +414,7 @@ impl BloomNode {
     ///
     /// `true` if the node is a leaf node; `false` otherwise.
     pub(crate) fn is_leafnode(&self) -> bool {
-        return self.left_child.is_none() && self.right_child.is_none();
+        self.left_child.is_none() && self.right_child.is_none()
     }
 }
 
@@ -421,38 +423,32 @@ mod tests {
     use super::*;
     use crate::bloom_filter::BloomFilter;
     use crate::cache;
-    use crate::file_parser::RecordTypes;
-    use bio::io::fasta;
     use std::fs;
 
-    fn get_tmp_dir() -> std::path::PathBuf {
-        PathBuf::from("tmp_testing/")
+    struct TestContext {
+        dir: PathBuf,
     }
-
-    struct TestContext {}
 
     impl TestContext {
-        fn setup() -> TestContext {
-            println!("Setting up the test context");
-            let tmp_direcory = get_tmp_dir();
-            if tmp_direcory.is_dir() {
-                fs::remove_dir_all(&tmp_direcory);
+        fn setup(name: &str) -> TestContext {
+            let dir = PathBuf::from(format!("tmp_testing_{}/", name));
+            if dir.is_dir() {
+                let _ = fs::remove_dir_all(&dir);
             }
-
-            fs::create_dir(&tmp_direcory).unwrap();
-            TestContext {}
+            fs::create_dir_all(&dir).unwrap();
+            TestContext { dir }
         }
 
-        fn get_tmp_dir(&self) -> std::path::PathBuf {
-            PathBuf::from("tmp_testing/")
+        fn get_tmp_dir(&self) -> PathBuf {
+            self.dir.clone()
         }
 
-        fn teardown(&self) -> () {
-            println!("Tearing down the test context");
-            fs::remove_dir_all(get_tmp_dir()).unwrap();
+        fn teardown(&self) {
+            let _ = fs::remove_dir_all(&self.dir);
         }
     }
 
+    #[allow(dead_code)]
     fn create_bloom_filter(false_positive_rate: f32, largest_expected_genome: u32) -> BloomFilter {
         let hash_states = (HashSeed::new(), HashSeed::new());
         BloomFilter::with_rate(false_positive_rate, largest_expected_genome, hash_states)
@@ -461,7 +457,7 @@ mod tests {
     #[test]
     fn test_empty_tree_insert() {
         // setup context
-        let context = TestContext::setup();
+        let context = TestContext::setup("bt_empty");
 
         // initialization states.
         let kmer_size = 5;
@@ -473,7 +469,7 @@ mod tests {
 
         // create a DNA sequence.
         let record_id = "tmp_bloom";
-        let kmers = file_parser::get_kmers(&"ATCAG".as_bytes().to_vec(), &kmer_size);
+        let kmers = file_parser::get_kmers("ATCAG".as_bytes(), &kmer_size);
         let record = file_parser::DNASequence::new(
             Some("ATCAG".as_bytes().to_vec()),
             record_id.to_string(),
@@ -510,7 +506,7 @@ mod tests {
         let expected_tree = BloomTree {
             root: Some(Box::new(expected_root)),
             directory: Some(directory.clone()),
-            kmer_size: kmer_size,
+            kmer_size,
             hash_states: tree.hash_states.clone(),
             bf_cache: Box::new(cache::BFLruCache::new(cache_size, directory.clone())),
             false_pos_rate: false_positive_rate,
@@ -519,208 +515,262 @@ mod tests {
 
         assert_eq!(tree, expected_tree);
 
-        //
-        // let tree = expected_tree;
-        // context.teardown();
+        drop(tree);
+        context.teardown();
+    }
+
+    #[test]
+    fn test_one_elem_tree_insert() {
+        let context = TestContext::setup("bt_one_elem");
+        let kmer_size = 5;
+        let directory = context.get_tmp_dir();
+        let cache_size = 5;
+        let false_positive_rate = 0.001;
+        let largest_expected_genome = 1000;
+
+        let kmers1 = file_parser::get_kmers("ATCAG".as_bytes(), &kmer_size);
+        let record1 = file_parser::DNASequence::new(
+            Some("ATCAG".as_bytes().to_vec()),
+            "test1".to_string(),
+            kmers1,
+        );
+        let kmers2 = file_parser::get_kmers("TTTAG".as_bytes(), &kmer_size);
+        let record2 = file_parser::DNASequence::new(
+            Some("TTTAG".as_bytes().to_vec()),
+            "test2".to_string(),
+            kmers2,
+        );
+
+        let bloomfilter_cache = cache::BFLruCache::new(cache_size, directory.clone());
+        let mut tree = BloomTree::new(
+            kmer_size,
+            &directory,
+            bloomfilter_cache,
+            false_positive_rate,
+            largest_expected_genome,
+        );
+        tree.insert(&record1);
+        tree.insert(&record2);
+
+        let root = tree.root.as_ref().expect("Root should exist");
+        assert!(root.left_child.is_some(), "Root should have a left child");
+        assert!(
+            root.right_child.is_some(),
+            "Root should have a right child"
+        );
+
+        let left = root.left_child.as_ref().unwrap();
+        let right = root.right_child.as_ref().unwrap();
+
+        // Both children should be leaves
+        assert!(
+            left.left_child.is_none() && left.right_child.is_none(),
+            "Left child should be a leaf"
+        );
+        assert!(
+            right.left_child.is_none() && right.right_child.is_none(),
+            "Right child should be a leaf"
+        );
+
+        // Tax IDs of leaves match the inserted genomes
+        assert_eq!(left.tax_id.as_deref(), Some("test1"));
+        assert_eq!(right.tax_id.as_deref(), Some("test2"));
+
+        drop(tree);
+        context.teardown();
+    }
+
+    #[test]
+    fn test_nested_tree_insert_left() {
+        let context = TestContext::setup("bt_nested_left");
+        let kmer_size = 5;
+        let directory = context.get_tmp_dir();
+        let cache_size = 5;
+        let false_positive_rate = 0.001;
+        let largest_expected_genome = 1000;
+
+        // genome3 has same sequence as genome1 — should be closer in hamming distance
+        let sequences = [("test1", "ATCAG"), ("test2", "TTTAG"), ("test3", "ATCAG")];
+        let records: Vec<_> = sequences
+            .iter()
+            .map(|(id, seq)| {
+                let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
+                file_parser::DNASequence::new(
+                    Some(seq.as_bytes().to_vec()),
+                    id.to_string(),
+                    kmers,
+                )
+            })
+            .collect();
+
+        let bloomfilter_cache = cache::BFLruCache::new(cache_size, directory.clone());
+        let mut tree = BloomTree::new(
+            kmer_size,
+            &directory,
+            bloomfilter_cache,
+            false_positive_rate,
+            largest_expected_genome,
+        );
+        for record in &records {
+            tree.insert(record);
+        }
+
+        // Expected tree:
+        //                    root (internal)
+        //                   /              \
+        //         left (internal)     right (leaf: test2)
+        //          /          \
+        //   (leaf: test1)  (leaf: test3)
+        let root = tree.root.as_ref().expect("Root should exist");
+        assert!(root.left_child.is_some() && root.right_child.is_some());
+
+        // Right child should be a leaf with test2's tax_id
+        let right = root.right_child.as_ref().unwrap();
+        assert!(
+            right.left_child.is_none() && right.right_child.is_none(),
+            "Right child should be a leaf"
+        );
+        assert_eq!(right.tax_id.as_deref(), Some("test2"));
+
+        // Left child should be an internal node with two leaf children
+        let left = root.left_child.as_ref().unwrap();
+        assert!(
+            left.left_child.is_some() && left.right_child.is_some(),
+            "Left child should be an internal node"
+        );
+
+        let ll = left.left_child.as_ref().unwrap();
+        let lr = left.right_child.as_ref().unwrap();
+        assert!(ll.left_child.is_none() && ll.right_child.is_none());
+        assert!(lr.left_child.is_none() && lr.right_child.is_none());
+
+        let inner_ids: Vec<_> = [ll.tax_id.as_deref(), lr.tax_id.as_deref()]
+            .into_iter()
+            .collect();
+        assert!(inner_ids.contains(&Some("test1")));
+        assert!(inner_ids.contains(&Some("test3")));
+
+        drop(tree);
+        context.teardown();
+    }
+
+    #[test]
+    fn test_nested_tree_insert_right() {
+        let context = TestContext::setup("bt_nested_right");
+        let kmer_size = 5;
+        let directory = context.get_tmp_dir();
+        let cache_size = 5;
+        let false_positive_rate = 0.001;
+        let largest_expected_genome = 1000;
+
+        // genome3 has same sequence as genome2 — should be closer in hamming distance
+        let sequences = [("test1", "ATCAG"), ("test2", "TTTAG"), ("test3", "TTTAG")];
+        let records: Vec<_> = sequences
+            .iter()
+            .map(|(id, seq)| {
+                let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
+                file_parser::DNASequence::new(
+                    Some(seq.as_bytes().to_vec()),
+                    id.to_string(),
+                    kmers,
+                )
+            })
+            .collect();
+
+        let bloomfilter_cache = cache::BFLruCache::new(cache_size, directory.clone());
+        let mut tree = BloomTree::new(
+            kmer_size,
+            &directory,
+            bloomfilter_cache,
+            false_positive_rate,
+            largest_expected_genome,
+        );
+        for record in &records {
+            tree.insert(record);
+        }
+
+        // Expected tree:
+        //            root (internal)
+        //           /              \
+        //  left (leaf: test1)   right (internal)
+        //                        /          \
+        //                 (leaf: test2)  (leaf: test3)
+        let root = tree.root.as_ref().expect("Root should exist");
+        assert!(root.left_child.is_some() && root.right_child.is_some());
+
+        // Left child should be a leaf with test1's tax_id
+        let left = root.left_child.as_ref().unwrap();
+        assert!(
+            left.left_child.is_none() && left.right_child.is_none(),
+            "Left child should be a leaf"
+        );
+        assert_eq!(left.tax_id.as_deref(), Some("test1"));
+
+        // Right child should be an internal node with two leaf children
+        let right = root.right_child.as_ref().unwrap();
+        assert!(
+            right.left_child.is_some() && right.right_child.is_some(),
+            "Right child should be an internal node"
+        );
+
+        let rl = right.left_child.as_ref().unwrap();
+        let rr = right.right_child.as_ref().unwrap();
+        assert!(rl.left_child.is_none() && rl.right_child.is_none());
+        assert!(rr.left_child.is_none() && rr.right_child.is_none());
+
+        let inner_ids: Vec<_> = [rl.tax_id.as_deref(), rr.tax_id.as_deref()]
+            .into_iter()
+            .collect();
+        assert!(inner_ids.contains(&Some("test2")));
+        assert!(inner_ids.contains(&Some("test3")));
+
+        drop(tree);
+        context.teardown();
+    }
+
+    #[test]
+    fn test_save_load() {
+        let context = TestContext::setup("bt_save_load");
+        let kmer_size = 4;
+        let scratch_dir = context.get_tmp_dir();
+        let cache_size = 5;
+        let false_positive_rate = 0.001;
+        let largest_expected_genome = 1000;
+
+        let sequences = [("test1", "ATCAG"), ("test2", "TTTAG"), ("test3", "TTTAG")];
+        let records: Vec<_> = sequences
+            .iter()
+            .map(|(id, seq)| {
+                let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
+                file_parser::DNASequence::new(
+                    Some(seq.as_bytes().to_vec()),
+                    id.to_string(),
+                    kmers,
+                )
+            })
+            .collect();
+
+        let bloomfilter_cache = cache::BFLruCache::new(cache_size, scratch_dir.clone());
+        let mut tree = BloomTree::new(
+            kmer_size,
+            &scratch_dir,
+            bloomfilter_cache,
+            false_positive_rate,
+            largest_expected_genome,
+        );
+        for record in &records {
+            tree.insert(record);
+        }
+
+        tree.save(&scratch_dir);
+
+        let load_cache = cache::BFLruCache::new(cache_size, scratch_dir.clone());
+        let loaded_tree = BloomTree::load(&scratch_dir, load_cache);
+
+        assert_eq!(tree, loaded_tree);
+
+        drop(loaded_tree);
+        drop(tree);
+        context.teardown();
     }
 }
-
-//     #[test]
-//     fn test_one_elem_tree_insert() {
-//         let kmer_size = 5;
-//         let mut tree = BloomTree::new(kmer_size);
-
-//         let records = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "TTTAG".as_ref())),
-//         ];
-
-//         for record in &records {
-//             tree = tree.insert(record);
-//         }
-
-//         let expected_leaves = records.map(|r| tree.init_leaf(&r));
-//         let mut expected_root = Box::new(BloomNode::new(
-//             tree.hash_states.clone(),
-//             tree.root.clone().unwrap().tax_id,
-//         ));
-//         // The leaves should under a parent node that has the union of their bloom filters
-//         for leaf in &expected_leaves {
-//             expected_root.bloom_filter.union(&leaf.bloom_filter);
-//         }
-//         [expected_root.left_child, expected_root.right_child] =
-//             expected_leaves.map(|node| Some(node));
-
-//         let expected_tree = BloomTree {
-//             root: Some(expected_root),
-//             kmer_size: kmer_size,
-//             hash_states: tree.hash_states.clone(),
-//         };
-
-//         assert_eq!(tree, expected_tree);
-//     }
-
-//     #[test]
-//     fn test_nested_tree_insert_left() {
-//         let kmer_size = 5;
-//         let mut tree = BloomTree::new(kmer_size);
-
-//         let records = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "TTTAG".as_ref())),
-//             // Has the same sequence as the first so the bloom filter should be closer to that leaf
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "ATCAG".as_ref())),
-//         ];
-
-//         for record in &records {
-//             tree = tree.insert(record);
-//         }
-
-//         let expected_leaves = records.map(|r| tree.init_leaf(&r));
-//         // Expected tree should now be:
-//         //                        (_, combined_test1_test2_test3)
-//         //                              /                  \
-//         //                            /                     \
-//         //            (_, combined_test1_test3)       (test2, TTTAG)
-//         //              /              \
-//         //            /                 \
-//         //    (test1, ATCAG)      (test3, ATCAG)
-//         let mut expected_root = Box::new(BloomNode::new(
-//             tree.hash_states.clone(),
-//             tree.root.clone().unwrap().tax_id,
-//         ));
-//         // The leaves should under a parent node that has the union of their bloom filters
-//         for leaf in &expected_leaves {
-//             expected_root.bloom_filter.union(&leaf.bloom_filter);
-//         }
-//         let mut inner_left_node = Box::new(BloomNode::new(
-//             tree.hash_states.clone(),
-//             tree.root
-//                 .clone()
-//                 .unwrap()
-//                 .left_child
-//                 .clone()
-//                 .unwrap()
-//                 .tax_id,
-//         ));
-//         // The left inner node's bloom filter should be identical to the first and third leaves bloom filters (since they have the same sequence)
-//         inner_left_node
-//             .bloom_filter
-//             .union(&expected_leaves[0].bloom_filter);
-//         [
-//             inner_left_node.left_child,
-//             expected_root.right_child,
-//             inner_left_node.right_child,
-//         ] = expected_leaves.map(|node| Some(node));
-//         expected_root.left_child = Some(inner_left_node);
-
-//         let expected_tree = BloomTree {
-//             root: Some(expected_root),
-//             kmer_size: kmer_size,
-//             hash_states: tree.hash_states.clone(),
-//         };
-
-//         assert_eq!(tree, expected_tree);
-//     }
-
-//     #[test]
-//     fn test_nested_tree_insert_right() {
-//         let kmer_size = 5;
-//         let mut tree = BloomTree::new(kmer_size);
-
-//         let records = [
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "TTTAG".as_ref())),
-//             // Has the same sequence as the second so the bloom filter should be closer to that leaf
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "TTTAG".as_ref())),
-//         ];
-
-//         for record in &records {
-//             tree = tree.insert(record);
-//         }
-
-//         let expected_leaves = records.map(|r| tree.init_leaf(&r));
-//         // Expected tree should now be:
-//         //    (_, combined_test1_test2_test3)
-//         //          /                  \
-//         //        /                     \
-//         // (test1, ATCAG)    (_, combined_test2_test3)
-//         //                       /              \
-//         //                     /                 \
-//         //              (test2, TTTAG)     (test3, TTTAG)
-//         let mut expected_root = Box::new(BloomNode::new(
-//             tree.hash_states.clone(),
-//             tree.root.clone().unwrap().tax_id,
-//         ));
-//         // The leaves should under a parent node that has the union of their bloom filters
-//         for leaf in &expected_leaves {
-//             expected_root.bloom_filter.union(&leaf.bloom_filter);
-//         }
-//         let mut inner_right_node = Box::new(BloomNode::new(
-//             tree.hash_states.clone(),
-//             tree.root
-//                 .clone()
-//                 .unwrap()
-//                 .right_child
-//                 .clone()
-//                 .unwrap()
-//                 .tax_id,
-//         ));
-//         // The right inner node's bloom filter should be identical to the second and third leaves bloom filters (since they have the same sequence)
-//         inner_right_node
-//             .bloom_filter
-//             .union(&expected_leaves[1].bloom_filter);
-//         [
-//             expected_root.left_child,
-//             inner_right_node.left_child,
-//             inner_right_node.right_child,
-//         ] = expected_leaves.map(|node| Some(node));
-//         expected_root.right_child = Some(inner_right_node);
-
-//         let expected_tree = BloomTree {
-//             root: Some(expected_root),
-//             kmer_size: kmer_size,
-//             hash_states: tree.hash_states.clone(),
-//         };
-
-//         assert_eq!(
-//             tree, expected_tree,
-//             "Test failed for {:#?} and {:#?}",
-//             tree, expected_tree
-//         );
-//     }
-
-//     #[test]
-//     fn test_save_load() {
-//         let kmer_size = 4;
-//         let rand_suffix: usize = rand::random();
-//         // We add a random suffix to prevent parallel tests from conflicting with each other.
-//         let scratch_dir_name = format!("test_tmp_{}/", rand_suffix);
-//         let scratch_dir = Path::new(&scratch_dir_name);
-//         let records1 = vec![
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "ATCAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "TTTAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "TTTAG".as_ref())),
-//         ];
-
-//         let records2 = vec![
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test1", None, "GATCAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test2", None, "GTTTAG".as_ref())),
-//             RecordTypes::FastaRecord(fasta::Record::with_attrs("test3", None, "GTTTAG".as_ref())),
-//         ];
-
-//         let tree1 = create_bloom_tree(records1, &kmer_size);
-
-//         // Should be able to save and load the same tree
-//         tree1.save(scratch_dir);
-//         assert_eq!(BloomTree::load(scratch_dir), tree1);
-
-//         // Saving overwrites existing saved tree
-//         let tree2 = create_bloom_tree(records2, &kmer_size);
-//         tree2.save(scratch_dir);
-//         assert_eq!(BloomTree::load(scratch_dir), tree2);
-
-//         // Cleanup scratch dir
-//         std::fs::remove_dir_all(scratch_dir).unwrap();
-//     }
-// }
