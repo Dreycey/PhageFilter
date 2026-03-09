@@ -14,16 +14,12 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v2
+              uses: actions/checkout@v4
               with:
                   ref: ${{ github.head_ref }}
 
             - name: Install Rust
-              uses: actions-rs/toolchain@v1
-              with:
-                  profile: minimal
-                  toolchain: nightly
-                  override: true
+              uses: dtolnay/rust-toolchain@nightly
 
             - name: Install cargo-tarpaulin
               run: cargo install cargo-tarpaulin
@@ -32,7 +28,7 @@ jobs:
               run: cargo +nightly tarpaulin --out Xml
 
             - name: Upload coverage to GitHub Actions
-              uses: actions/upload-artifact@v2
+              uses: actions/upload-artifact@v4
               with:
                   name: coverage
                   path: cobertura.xml
