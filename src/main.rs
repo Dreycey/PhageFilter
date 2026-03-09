@@ -4,7 +4,7 @@ mod cache;
 mod file_parser;
 mod query;
 mod result_map;
-use clap::{arg, Parser, Subcommand};
+use clap::{arg, Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::Verbosity;
 use rayon::prelude::*;
 use std::fs;
@@ -13,6 +13,27 @@ use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+/// CLI-level format selection, mapped to `file_parser::FormatOverride`.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum FormatArg {
+    /// Auto-detect format by inspecting file contents (default)
+    Auto,
+    /// Force FASTA parsing
+    Fasta,
+    /// Force FASTQ parsing
+    Fastq,
+}
+
+impl From<FormatArg> for file_parser::FormatOverride {
+    fn from(arg: FormatArg) -> Self {
+        match arg {
+            FormatArg::Auto => file_parser::FormatOverride::Auto,
+            FormatArg::Fasta => file_parser::FormatOverride::Fasta,
+            FormatArg::Fastq => file_parser::FormatOverride::Fastq,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "PhageFilter")]
@@ -54,6 +75,9 @@ enum Commands {
         /// Largest expected genome/chromosome size. (impacts size of the bloom filter)
         #[arg(required = false, default_value_t = 1000000, short, long)]
         largest_genome: u32,
+        /// Input file format. Auto-detects by default via content sniffing.
+        #[arg(required = false, default_value_t = FormatArg::Auto, short = 'F', long, value_enum)]
+        format: FormatArg,
     },
     /// Adds genomes to an already built BloomFilter.
     Add {
@@ -69,6 +93,9 @@ enum Commands {
         /// Size of the LRU cache. (how many BFs in memory at once.)
         #[arg(required = false, default_value_t = 10, short, long)]
         cache_size: usize,
+        /// Input file format. Auto-detects by default via content sniffing.
+        #[arg(required = false, default_value_t = FormatArg::Auto, short = 'F', long, value_enum)]
+        format: FormatArg,
     },
     /// Queries a set of reads. (ran after building the bloom tree)
     Query {
@@ -102,6 +129,9 @@ enum Commands {
         /// Filter reads NOT matching genomes in the gSBT.
         #[arg(required = false, default_value_t = false, long)]
         neg_filter: bool,
+        /// Input file format. Auto-detects by default via content sniffing.
+        #[arg(required = false, default_value_t = FormatArg::Auto, short = 'F', long, value_enum)]
+        format: FormatArg,
     },
 }
 
@@ -123,6 +153,7 @@ fn main() {
             cache_size,
             false_pos_rate,
             largest_genome,
+            format,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -140,7 +171,7 @@ fn main() {
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(genomes, 1, *kmer_size, false);
+                file_parser::ReadQueue::with_format(genomes, 1, *kmer_size, false, (*format).into());
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             // create a new cache
@@ -173,6 +204,7 @@ fn main() {
             db_path,
             threads,
             cache_size,
+            format,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -199,7 +231,7 @@ fn main() {
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(genomes, 1, bloom_tree.kmer_size, false);
+                file_parser::ReadQueue::with_format(genomes, 1, bloom_tree.kmer_size, false, (*format).into());
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             while !genome_block.is_empty() {
@@ -225,6 +257,7 @@ fn main() {
             search_depth,
             pos_filter,
             neg_filter,
+            format,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -266,11 +299,12 @@ fn main() {
             }
 
             // create a read buffer
-            let mut readqueue = file_parser::ReadQueue::new(
+            let mut readqueue = file_parser::ReadQueue::with_format(
                 reads,
                 *block_size_reads,
                 bloom_tree.kmer_size,
                 filtering_option,
+                (*format).into(),
             );
 
             // create an output directory

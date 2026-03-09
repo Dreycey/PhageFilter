@@ -21,6 +21,27 @@ Commands:
   query  Queries a set of reads. (ran after building the bloom tree)
 ```
 
+### Supported File Formats
+
+PhageFilter accepts FASTA and FASTQ files, including **gzip-compressed** variants.
+
+| Format | Recognized Extensions |
+|--------|----------------------|
+| FASTA  | `.fa`, `.fasta`, `.fna`, `.fsa`, `.fas` |
+| FASTQ  | `.fq`, `.fastq` |
+| Gzip   | Any of the above with `.gz` / `.gzip` suffix (e.g. `.fq.gz`, `.fasta.gz`) |
+
+**Format auto-detection:** By default (`--format auto`), PhageFilter inspects the first bytes of each file to determine the format:
+- `>` → FASTA
+- `@` → FASTQ
+- Gzip magic bytes (`1f 8b`) → decompresses and re-inspects
+
+If content sniffing is inconclusive, the file extension is used as a fallback (FASTQ for `.fq`/`.fastq`, FASTA for everything else).
+
+**Manual override:** Use `--format fasta` or `--format fastq` (`-F`) to force a specific parser, bypassing auto-detection.
+
+When a directory is provided as input, PhageFilter scans for files with the extensions listed above (including `.gz` compound extensions) and silently skips unrecognized files.
+
 ### Verbosity level
 
 The user can set the verbosity level. Below are different options for verbosity, which are available using the Rust [clap-verbosity-flag](https://crates.io/crates/clap-verbosity-flag) crate. If users want information about the tree being built, or other information about the particular run, use the `-vv` level of verbosity to get warnings and info.
