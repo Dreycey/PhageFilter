@@ -42,6 +42,8 @@ If content sniffing is inconclusive, the file extension is used as a fallback (F
 
 When a directory is provided as input, PhageFilter scans for files with the extensions listed above (including `.gz` compound extensions) and silently skips unrecognized files.
 
+**Filtering output format:** When using `--pos-filter` or `--neg-filter`, the output files (`POS_FILTERING` / `NEG_FILTERING`) inherit the input format. FASTQ input produces FASTQ output (with quality scores preserved); FASTA input produces FASTA output.
+
 ### Verbosity level
 
 The user can set the verbosity level. Below are different options for verbosity, which are available using the Rust [clap-verbosity-flag](https://crates.io/crates/clap-verbosity-flag) crate. If users want information about the tree being built, or other information about the particular run, use the `-vv` level of verbosity to get warnings and info.
