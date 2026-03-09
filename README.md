@@ -1,5 +1,5 @@
 ![software workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/rust.yml/badge.svg)
-![Coverage](https://img.shields.io/badge/coverage-59.88%25-brightgreen.svg?style=flat-square)
+![Coverage](https://img.shields.io/badge/coverage-70.52%25-brightgreen.svg?style=flat-square)
 ![benchmarking workflow status](https://github.com/Dreycey/PhageFilter/actions/workflows/benchmarking_tests.yaml/badge.svg)
 ![LICENSE](https://img.shields.io/badge/license-GPL--3.0-brightgreen)
 
@@ -20,6 +20,55 @@ Commands:
   add    Adds genomes to an already built BloomFilter
   query  Queries a set of reads. (ran after building the bloom tree)
 ```
+
+### Supported File Formats
+
+PhageFilter accepts FASTA and FASTQ files, including **gzip-compressed** variants.
+
+| Format | Recognized Extensions |
+|--------|----------------------|
+| FASTA  | `.fa`, `.fasta`, `.fna`, `.fsa`, `.fas` |
+| FASTQ  | `.fq`, `.fastq` |
+| Gzip   | Any of the above with `.gz` / `.gzip` suffix (e.g. `.fq.gz`, `.fasta.gz`) |
+
+**Format auto-detection:** By default (`--format auto`), PhageFilter inspects the first bytes of each file to determine the format:
+- `>` → FASTA
+- `@` → FASTQ
+- Gzip magic bytes (`1f 8b`) → decompresses and re-inspects
+
+If content sniffing is inconclusive, the file extension is used as a fallback (FASTQ for `.fq`/`.fastq`, FASTA for everything else).
+
+**Manual override:** Use `--format fasta` or `--format fastq` (`-F`) to force a specific parser, bypassing auto-detection.
+
+When a directory is provided as input, PhageFilter scans for files with the extensions listed above (including `.gz` compound extensions) and silently skips unrecognized files.
+
+**Filtering output format:** When using `--pos-filter` or `--neg-filter`, the output files (`POS_FILTERING` / `NEG_FILTERING`) inherit the input format. FASTQ input produces FASTQ output (with quality scores preserved); FASTA input produces FASTA output.
+
+### Query Output
+
+The `query` command produces the following output files in the directory specified by `-o`:
+
+**`CLASSIFICATION.csv`** — A summary of read counts per genome. Each row is `genome_id,count` where `genome_id` is the sequence ID (from the FASTA header) of a reference genome in the gSBT, and `count` is the number of query reads that mapped to it. Only genomes with at least one mapped read are listed.
+
+**`POS_FILTERING.fa` / `POS_FILTERING.fq`** (when `--pos-filter` is used) — Reads that matched at least one genome in the gSBT. The header of each output read is annotated with the matched genome(s):
+
+```
+>read_id |genome_A,genome_B
+ACGTACGT...
+```
+or for FASTQ input:
+```
+@read_id |genome_A,genome_B
+ACGTACGT...
++
+IIIIIIII...
+```
+
+The `|`-delimited suffix lists all genome IDs whose bloom filter the read passed at the given threshold (`-f`). A read may match multiple genomes. The genome IDs correspond to the sequence IDs from the reference FASTA files used during `build`.
+
+**`NEG_FILTERING.fa` / `NEG_FILTERING.fq`** (when `--neg-filter` is used) — Reads that did **not** match any genome. These retain their original header with no annotation.
+
+**Matching semantics:** A read is considered to match a genome when at least the fraction of its k-mers specified by `--filter-threshold` (`-f`, default 1.0) are present in that genome's bloom filter. The match is binary (pass/fail at the threshold); no per-genome score or ranking is currently reported.
 
 ### Verbosity level
 

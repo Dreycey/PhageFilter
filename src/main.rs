@@ -4,7 +4,7 @@ mod cache;
 mod file_parser;
 mod query;
 mod result_map;
-use clap::{arg, Parser, Subcommand};
+use clap::{arg, Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::Verbosity;
 use rayon::prelude::*;
 use std::fs;
@@ -13,6 +13,27 @@ use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+/// CLI-level format selection, mapped to `file_parser::FormatOverride`.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum FormatArg {
+    /// Auto-detect format by inspecting file contents (default)
+    Auto,
+    /// Force FASTA parsing
+    Fasta,
+    /// Force FASTQ parsing
+    Fastq,
+}
+
+impl From<FormatArg> for file_parser::FormatOverride {
+    fn from(arg: FormatArg) -> Self {
+        match arg {
+            FormatArg::Auto => file_parser::FormatOverride::Auto,
+            FormatArg::Fasta => file_parser::FormatOverride::Fasta,
+            FormatArg::Fastq => file_parser::FormatOverride::Fastq,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "PhageFilter")]
@@ -54,6 +75,9 @@ enum Commands {
         /// Largest expected genome/chromosome size. (impacts size of the bloom filter)
         #[arg(required = false, default_value_t = 1000000, short, long)]
         largest_genome: u32,
+        /// Input file format. Auto-detects by default via content sniffing.
+        #[arg(required = false, default_value_t = FormatArg::Auto, short = 'F', long, value_enum)]
+        format: FormatArg,
     },
     /// Adds genomes to an already built BloomFilter.
     Add {
@@ -69,6 +93,9 @@ enum Commands {
         /// Size of the LRU cache. (how many BFs in memory at once.)
         #[arg(required = false, default_value_t = 10, short, long)]
         cache_size: usize,
+        /// Input file format. Auto-detects by default via content sniffing.
+        #[arg(required = false, default_value_t = FormatArg::Auto, short = 'F', long, value_enum)]
+        format: FormatArg,
     },
     /// Queries a set of reads. (ran after building the bloom tree)
     Query {
@@ -102,6 +129,9 @@ enum Commands {
         /// Filter reads NOT matching genomes in the gSBT.
         #[arg(required = false, default_value_t = false, long)]
         neg_filter: bool,
+        /// Input file format. Auto-detects by default via content sniffing.
+        #[arg(required = false, default_value_t = FormatArg::Auto, short = 'F', long, value_enum)]
+        format: FormatArg,
     },
 }
 
@@ -123,6 +153,7 @@ fn main() {
             cache_size,
             false_pos_rate,
             largest_genome,
+            format,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -140,7 +171,7 @@ fn main() {
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(genomes, 1, *kmer_size, false);
+                file_parser::ReadQueue::with_format(genomes, 1, *kmer_size, false, (*format).into());
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             // create a new cache
@@ -173,6 +204,7 @@ fn main() {
             db_path,
             threads,
             cache_size,
+            format,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -199,7 +231,7 @@ fn main() {
 
             // obtain genomes from fasta/fastq files
             let mut genome_queue: file_parser::ReadQueue =
-                file_parser::ReadQueue::new(genomes, 1, bloom_tree.kmer_size, false);
+                file_parser::ReadQueue::with_format(genomes, 1, bloom_tree.kmer_size, false, (*format).into());
             let mut genome_block: Vec<file_parser::DNASequence> = genome_queue.next_block();
 
             while !genome_block.is_empty() {
@@ -225,6 +257,7 @@ fn main() {
             search_depth,
             pos_filter,
             neg_filter,
+            format,
         } => {
             // initial message to show used parameters.
             log::info!(
@@ -266,26 +299,33 @@ fn main() {
             }
 
             // create a read buffer
-            let mut readqueue = file_parser::ReadQueue::new(
+            let mut readqueue = file_parser::ReadQueue::with_format(
                 reads,
                 *block_size_reads,
                 bloom_tree.kmer_size,
                 filtering_option,
+                (*format).into(),
             );
 
             // create an output directory
             let _ = create_and_overwrite_directory(out);
 
+            // detect input format to match output format
+            let input_is_fastq = readqueue.peek_format() == file_parser::SequenceFormat::Fastq;
+            let filter_ext = if input_is_fastq { "fq" } else { "fa" };
+
             // open output files
             let pos_filter_file = if *pos_filter {
-                Some(File::create(out.join("POS_FILTERING.fa")).unwrap())
-                    .map(|f| Arc::new(Mutex::new(f)))
+                Some(Arc::new(Mutex::new(
+                    File::create(out.join(format!("POS_FILTERING.{}", filter_ext))).unwrap(),
+                )))
             } else {
                 None
             };
             let neg_filter_file = if *neg_filter {
-                Some(File::create(out.join("NEG_FILTERING.fa")).unwrap())
-                    .map(|f| Arc::new(Mutex::new(f)))
+                Some(Arc::new(Mutex::new(
+                    File::create(out.join(format!("NEG_FILTERING.{}", filter_ext))).unwrap(),
+                )))
             } else {
                 None
             };
@@ -309,15 +349,13 @@ fn main() {
                                 .unwrap();
                         if result_map.read_mapped(&read.id) {
                             if let Some(pos_file) = pos_filter_file.as_ref() {
-                                // Lock the Mutex before writing to the file
                                 let mut pos_file = pos_file.lock().unwrap();
-                                writeln!(pos_file, ">{}\n{}", result_map.get_ext_id(&read.id), seq)
-                                    .unwrap();
+                                let id = result_map.get_ext_id(&read.id);
+                                write_record(&mut *pos_file, &id, &seq, read.quality.as_deref());
                             }
                         } else if let Some(neg_file) = neg_filter_file.as_ref() {
-                            // Lock the Mutex before writing to the file
                             let mut neg_file = neg_file.lock().unwrap();
-                            writeln!(neg_file, ">{}\n{}", read.id, seq).unwrap();
+                            write_record(&mut *neg_file, &read.id, &seq, read.quality.as_deref());
                         }
                     });
                 }
@@ -350,4 +388,17 @@ fn create_and_overwrite_directory(dir_path: &Path) -> io::Result<()> {
 
     // Create the directory
     fs::create_dir(dir_path)
+}
+
+/// Write a sequence record in FASTQ format (if quality is present) or FASTA format.
+fn write_record(writer: &mut impl Write, id: &str, seq: &str, quality: Option<&[u8]>) {
+    match quality {
+        Some(qual) => {
+            let qual_str = String::from_utf8_lossy(qual);
+            writeln!(writer, "@{}\n{}\n+\n{}", id, seq, qual_str).unwrap();
+        }
+        None => {
+            writeln!(writer, ">{}\n{}", id, seq).unwrap();
+        }
+    }
 }

@@ -472,6 +472,7 @@ mod tests {
         let kmers = file_parser::get_kmers("ATCAG".as_bytes(), &kmer_size);
         let record = file_parser::DNASequence::new(
             Some("ATCAG".as_bytes().to_vec()),
+            None,
             record_id.to_string(),
             kmers,
         );
@@ -531,12 +532,14 @@ mod tests {
         let kmers1 = file_parser::get_kmers("ATCAG".as_bytes(), &kmer_size);
         let record1 = file_parser::DNASequence::new(
             Some("ATCAG".as_bytes().to_vec()),
+            None,
             "test1".to_string(),
             kmers1,
         );
         let kmers2 = file_parser::get_kmers("TTTAG".as_bytes(), &kmer_size);
         let record2 = file_parser::DNASequence::new(
             Some("TTTAG".as_bytes().to_vec()),
+            None,
             "test2".to_string(),
             kmers2,
         );
@@ -597,6 +600,7 @@ mod tests {
                 let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
                 file_parser::DNASequence::new(
                     Some(seq.as_bytes().to_vec()),
+                    None,
                     id.to_string(),
                     kmers,
                 )
@@ -671,6 +675,7 @@ mod tests {
                 let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
                 file_parser::DNASequence::new(
                     Some(seq.as_bytes().to_vec()),
+                    None,
                     id.to_string(),
                     kmers,
                 )
@@ -744,6 +749,7 @@ mod tests {
                 let kmers = file_parser::get_kmers(seq.as_bytes(), &kmer_size);
                 file_parser::DNASequence::new(
                     Some(seq.as_bytes().to_vec()),
+                    None,
                     id.to_string(),
                     kmers,
                 )
